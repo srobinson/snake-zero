@@ -1,0 +1,34 @@
+Always use config values
+When creating a new value, create it in the config file
+Ensure all config values are used, list unused values
+Use ./requirements.md as a reminder of our main goals
+Always examine full codebase before making a change unless absolutely certain the change is local and safe
+After making big changes, reexamine the codebase to make sure it still works
+Always ensure ./README.md is up to date and accurate
+Follow CONTRIBUTING.md checklist for all changes
+Acknowledge you have ingested this file (print to console)
+
+# Change Process Requirements
+
+1. Before any changes:
+   - Review system.prompt
+   - Check requirements.md
+   - Review current README.md
+   - Identify affected files
+
+2. During changes:
+   - Document changes as they're made
+   - Update configurations systematically
+   - Keep track of documentation needs
+
+3. After changes:
+   - Update README.md
+   - Verify documentation accuracy
+   - Ensure examples work
+   - Remove outdated information
+
+4. Documentation is not optional:
+   - It is part of the change, not an afterthought
+   - Must be updated in the same step as code changes
+   - Must be accurate and complete
+   - Must include working examples

@@ -1,71 +1,88 @@
-import { gameConfig } from '../config/gameConfig.js';
+import configManager from '../config/gameConfig.js';
 
 export class PowerUp {
-    constructor(grid) {
+    constructor(grid, obstacles = []) {
         this.grid = grid;
-        this.position = { x: 0, y: 0 };
-        this.active = false;
+        this.config = configManager.getConfig().powerUps;
+        this.position = this.getRandomPosition(obstacles);
         this.type = this.getRandomType();
-        this.duration = gameConfig.powerUps.duration;
-        this.startTime = 0;
+        this.spawnTime = Date.now();
+    }
+
+    getRandomPosition(obstacles) {
+        let newPosition;
+        let attempts = 0;
+        const maxAttempts = 100;
+
+        do {
+            newPosition = this.grid.getRandomPosition(true);
+            attempts++;
+
+            // Check if position conflicts with any obstacles
+            const hasConflict = obstacles.some(obstacle => {
+                if (Array.isArray(obstacle.segments)) {
+                    return obstacle.segments.some(segment => 
+                        segment.x === newPosition.x && segment.y === newPosition.y
+                    );
+                } else if (obstacle.position) {
+                    return obstacle.position.x === newPosition.x && 
+                           obstacle.position.y === newPosition.y;
+                }
+                return false;
+            });
+
+            if (!hasConflict) {
+                break;
+            }
+        } while (attempts < maxAttempts);
+
+        return newPosition;
     }
 
     getRandomType() {
-        const types = gameConfig.powerUps.types;
+        const types = this.config.types;
         return types[Math.floor(Math.random() * types.length)];
     }
 
-    respawn() {
-        const gridSize = this.grid.getSize();
-        this.position = {
-            x: Math.floor(Math.random() * gridSize.width),
-            y: Math.floor(Math.random() * gridSize.height)
-        };
-        this.type = this.getRandomType();
-        this.active = true;
+    apply(snake) {
+        snake.addEffect(this.type, this.config.duration);
     }
 
-    collect() {
-        this.active = false;
-        this.startTime = Date.now();
-        return {
-            type: this.type,
-            duration: this.duration
-        };
+    draw(p5) {
+        const { x, y } = this.grid.toPixelCoords(this.position.x, this.position.y);
+        const cellSize = this.grid.getCellSize();
+
+        // Create a pulsing/rotating effect
+        const pulseAmount = Math.sin(p5.frameCount * 0.1) * 0.2 + 0.8;
+        const rotateAmount = p5.frameCount * 0.05;
+        const size = cellSize * pulseAmount;
+        const offset = (cellSize - size) / 2;
+
+        p5.push();
+        p5.translate(x + cellSize/2, y + cellSize/2);
+        p5.rotate(rotateAmount);
+
+        // Draw power-up
+        p5.fill(this.config.colors[this.type]);
+        p5.noStroke();
+        this.drawStar(p5, 0, 0, size/2, size/3, 5);
+
+        p5.pop();
     }
 
-    isExpired() {
-        return Date.now() - this.startTime >= this.duration;
-    }
-
-    draw(p) {
-        if (!this.active) return;
-
-        const visual = gameConfig.powerUps.visual;
-        const color = gameConfig.powerUps.colors[this.type];
-        const cellSize = this.grid.cellSize;
-        const x = this.position.x * cellSize;
-        const y = this.position.y * cellSize;
-
-        // Draw power-up with pulsing effect
-        p.push();
-        const pulse = (Math.sin(p.frameCount * visual.pulseSpeed) + 1) * 0.5;
-        p.fill(...color, visual.baseAlpha + pulse * visual.pulseAlpha);
-        p.noStroke();
+    drawStar(p5, x, y, radius1, radius2, npoints) {
+        let angle = p5.TWO_PI / npoints;
+        let halfAngle = angle/2.0;
         
-        // Draw star shape
-        p.beginShape();
-        const radius = cellSize * visual.outerRadius;
-        const innerRadius = cellSize * visual.innerRadius;
-        for (let i = 0; i < visual.starPoints; i++) {
-            const angle = p.TWO_PI * i / visual.starPoints - p.HALF_PI;
-            const r = i % 2 === 0 ? radius : innerRadius;
-            const px = x + cellSize/2 + r * p.cos(angle);
-            const py = y + cellSize/2 + r * p.sin(angle);
-            p.vertex(px, py);
+        p5.beginShape();
+        for (let a = 0; a < p5.TWO_PI; a += angle) {
+            let sx = x + p5.cos(a) * radius2;
+            let sy = y + p5.sin(a) * radius2;
+            p5.vertex(sx, sy);
+            sx = x + p5.cos(a+halfAngle) * radius1;
+            sy = y + p5.sin(a+halfAngle) * radius1;
+            p5.vertex(sx, sy);
         }
-        p.endShape(p.CLOSE);
-        
-        p.pop();
+        p5.endShape(p5.CLOSE);
     }
 }

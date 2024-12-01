@@ -117,6 +117,19 @@
   - Persistent storage for high scores and achievements.
   - JSON format for easy parsing and updating.
 
+## Development Tools
+- **Debug Panel**:
+  - Real-time display of game metrics and state
+  - Grid dimensions and cell size monitoring
+  - FPS counter and performance metrics
+  - Current game state and transitions
+  - Snake properties (position, length, speed)
+  - Power-up status and timers
+  - Collision detection visualization
+  - Toggle grid lines and hitboxes
+  - Config override capabilities
+  - State manipulation for testing
+
 ## Additional Features
 - **Touch Controls**: 
   - Support for mobile devices with touch input.

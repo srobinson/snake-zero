@@ -1,88 +1,120 @@
-import configManager from '../config/gameConfig.js';
-
 export class PowerUp {
-    constructor(grid, obstacles = []) {
+    constructor(grid, game) {
+        if (!grid) throw new Error('Grid is required for PowerUp');
+        if (!game) throw new Error('Game is required for PowerUp');
+        
         this.grid = grid;
-        this.config = configManager.getConfig().powerUps;
-        this.position = this.getRandomPosition(obstacles);
+        this.game = game;
+        this.config = game.getConfig();
+        
+        // Initialize position and type
+        this.position = null;
         this.type = this.getRandomType();
-        this.spawnTime = Date.now();
+        
+        // Spawn power-up
+        this.respawn();
     }
 
-    getRandomPosition(obstacles) {
+    respawn(obstacles = []) {
         let newPosition;
         let attempts = 0;
         const maxAttempts = 100;
 
         do {
-            newPosition = this.grid.getRandomPosition(true);
+            newPosition = this.grid.getRandomPosition();
             attempts++;
 
-            // Check if position conflicts with any obstacles
-            const hasConflict = obstacles.some(obstacle => {
+            // Check collision with obstacles
+            if (obstacles.some(obstacle => {
                 if (Array.isArray(obstacle.segments)) {
                     return obstacle.segments.some(segment => 
                         segment.x === newPosition.x && segment.y === newPosition.y
                     );
-                } else if (obstacle.position) {
-                    return obstacle.position.x === newPosition.x && 
-                           obstacle.position.y === newPosition.y;
                 }
                 return false;
-            });
-
-            if (!hasConflict) {
-                break;
+            })) {
+                newPosition = null;
             }
-        } while (attempts < maxAttempts);
+        } while (!newPosition && attempts < maxAttempts);
 
-        return newPosition;
+        if (!newPosition) {
+            console.warn('Could not find valid power-up position after', maxAttempts, 'attempts');
+            return false;
+        }
+
+        this.position = newPosition;
+        this.type = this.getRandomType();
+        return true;
     }
 
     getRandomType() {
-        const types = this.config.types;
+        const types = this.config.powerUpTypes || ['speed'];
         return types[Math.floor(Math.random() * types.length)];
     }
 
-    apply(snake) {
-        snake.addEffect(this.type, this.config.duration);
-    }
-
     draw(p5) {
-        const { x, y } = this.grid.toPixelCoords(this.position.x, this.position.y);
-        const cellSize = this.grid.getCellSize();
-
-        // Create a pulsing/rotating effect
-        const pulseAmount = Math.sin(p5.frameCount * 0.1) * 0.2 + 0.8;
-        const rotateAmount = p5.frameCount * 0.05;
-        const size = cellSize * pulseAmount;
-        const offset = (cellSize - size) / 2;
-
+        if (!this.position) return;
+        
+        const cellSize = this.grid.cellSize;
+        const x = this.position.x * cellSize;
+        const y = this.position.y * cellSize;
+        
+        // Get color based on type
+        const colors = {
+            speed: this.config.powerUpSpeedColor || '#FFD700',
+            slow: this.config.powerUpSlowColor || '#4169E1',
+            ghost: this.config.powerUpGhostColor || '#7B68EE',
+            points: this.config.powerUpPointsColor || '#32CD32'
+        };
+        
+        p5.fill(colors[this.type] || '#FFD700');
+        p5.noStroke();
+        
+        // Draw power-up with star shape
+        const radius = cellSize * 0.4;
+        const points = 5;
+        const innerRadius = radius * 0.4;
+        
         p5.push();
         p5.translate(x + cellSize/2, y + cellSize/2);
-        p5.rotate(rotateAmount);
-
-        // Draw power-up
-        p5.fill(this.config.colors[this.type]);
-        p5.noStroke();
-        this.drawStar(p5, 0, 0, size/2, size/3, 5);
-
+        p5.beginShape();
+        for (let i = 0; i < points * 2; i++) {
+            const r = i % 2 === 0 ? radius : innerRadius;
+            const angle = (i * Math.PI) / points;
+            p5.vertex(Math.cos(angle) * r, Math.sin(angle) * r);
+        }
+        p5.endShape(p5.CLOSE);
         p5.pop();
     }
 
-    drawStar(p5, x, y, radius1, radius2, npoints) {
-        let angle = p5.TWO_PI / npoints;
-        let halfAngle = angle/2.0;
-        
-        p5.beginShape();
-        for (let a = 0; a < p5.TWO_PI; a += angle) {
-            let sx = x + p5.cos(a) * radius2;
-            let sy = y + p5.sin(a) * radius2;
-            p5.vertex(sx, sy);
-            sx = x + p5.cos(a+halfAngle) * radius1;
-            sy = y + p5.sin(a+halfAngle) * radius1;
-            p5.vertex(sx, sy);
+    /**
+     * Apply power-up effect to the snake
+     * @param {Snake} snake - The snake to apply the effect to
+     */
+    apply(snake) {
+        if (!snake) {
+            console.error('Cannot apply power-up: snake is null');
+            return;
         }
-        p5.endShape(p5.CLOSE);
+
+        const duration = this.config.powerUpDuration || 5000;
+
+        switch (this.type) {
+            case 'speed':
+                snake.addEffect('speed', duration);
+                break;
+            case 'slow':
+                snake.addEffect('slow', duration);
+                break;
+            case 'ghost':
+                snake.addEffect('ghost', duration);
+                break;
+            case 'points':
+                // Points multiplier is temporary
+                snake.addEffect('points', duration);
+                break;
+            default:
+                console.warn('Unknown power-up type:', this.type);
+        }
     }
 }

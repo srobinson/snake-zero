@@ -53,10 +53,13 @@ export class GameState {
     addScore(points, config) {
         const now = Date.now();
         
-        // Check for combo
-        if (now - this.lastScoreTime < config.scoring.comboTimeWindow) {
+        // Check for combo using flat config
+        const comboTimeWindow = config.comboTimeWindow || 2000;  // Default 2 seconds
+        const comboMultiplier = config.comboMultiplier || 1.5;   // Default 1.5x
+        
+        if (now - this.lastScoreTime < comboTimeWindow) {
             this.combo++;
-            points *= Math.pow(config.scoring.comboMultiplier, this.combo);
+            points *= Math.pow(comboMultiplier, this.combo);
         } else {
             this.combo = 0;
         }

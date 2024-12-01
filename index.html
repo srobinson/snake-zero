@@ -8,30 +8,27 @@
     <script>
         // Initialize game config
         window.setGameConfig = function(config) {
-            localStorage.setItem('gameConfig', JSON.stringify(config));
+            localStorage.setItem('snakeConfig', JSON.stringify(config));
         };
         
-        // Set fullscreen with cell size 50
+        // Set initial config
         const config = {
-            board: {
-                preset: 'fullscreen',
-                presets: {
-                    fullscreen: {
-                        width: window.innerWidth,
-                        height: window.innerHeight,
-                        cellSize: 50
-                    }
-                }
-            }
+            gameMode: 'fullscreen',
+            cellSize: 50,
+            width: window.innerWidth,
+            height: window.innerHeight,
+            backgroundColor: '#FFFFFF',
+            gridColor: '#CCCCCC',
+            showGrid: true
         };
         window.setGameConfig(config);
 
-        // Update board size on window resize
+        // Update dimensions on window resize
         window.addEventListener('resize', () => {
-            const config = JSON.parse(localStorage.getItem('gameConfig') || '{}');
-            if (config.board?.preset === 'fullscreen') {
-                config.board.presets.fullscreen.width = window.innerWidth;
-                config.board.presets.fullscreen.height = window.innerHeight;
+            const config = JSON.parse(localStorage.getItem('snakeConfig') || '{}');
+            if (config.gameMode === 'fullscreen') {
+                config.width = window.innerWidth;
+                config.height = window.innerHeight;
                 window.setGameConfig(config);
                 // Reload to apply new size
                 window.location.reload();

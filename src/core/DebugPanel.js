@@ -178,13 +178,15 @@ export class DebugPanel {
 
         if (this.config.showSnakeInfo) {
             const snake = this.game.snake;
+            const currentSpeed = snake.getCurrentSpeed ? snake.getCurrentSpeed() : this.game.config.snake.baseSpeed;
+            
             p5.text(`Snake Length: ${snake.segments.length}`, x + this.config.padding, currentY);
             currentY += lineHeight;
             p5.text(`Direction: ${snake.direction}`, x + this.config.padding, currentY);
             currentY += lineHeight;
-            p5.text(`Base Speed: ${snake.baseSpeed.toFixed(1)}`, x + this.config.padding, currentY);
+            p5.text(`Speed: ${currentSpeed.toFixed(1)}`, x + this.config.padding, currentY);
             currentY += lineHeight;
-            p5.text(`Food Eaten: ${snake.foodEaten}`, x + this.config.padding, currentY);
+            p5.text(`Score: ${snake.score}`, x + this.config.padding, currentY);
             currentY += lineHeight;
         }
 

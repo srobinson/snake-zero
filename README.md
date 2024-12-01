@@ -30,6 +30,15 @@ A modern, educational implementation of the classic Snake game, designed for chi
   - ← or A: Move left
   - → or D: Move right
 - **Touch Controls**: Swipe in desired direction (mobile devices)
+- **Board Size Controls**:
+  - Q: Small board
+  - W: Medium board
+  - E: Large board
+  - R: Toggle fullscreen mode
+- **Debug Controls** (when debug mode is enabled):
+  - D: Toggle debug panel
+  - 1-3: Spawn power-ups
+  - +/-: Adjust cell size
 
 ## 🏆 Achievements
 
@@ -45,35 +54,91 @@ Snake Zero features a powerful configuration system that allows customization of
 ### Difficulty Levels
 
 ```javascript
-window.setGameConfig({
-    difficulty: 'normal'  // 'easy', 'normal', or 'hard'
-});
+{
+    difficulty: {
+        current: 'normal',  // 'easy', 'normal', or 'hard'
+        presets: {
+            easy: {
+                baseSpeed: 5,
+                powerUpChance: 0.02
+            },
+            normal: {
+                baseSpeed: 8,
+                powerUpChance: 0.01
+            },
+            hard: {
+                baseSpeed: 12,
+                powerUpChance: 0.005
+            }
+        }
+    }
+}
+```
+
+### Speed Progression
+
+The snake's speed increases as you collect food, making the game progressively more challenging:
+
+```javascript
+{
+    snake: {
+        speedProgression: {
+            enabled: true,          // Enable/disable speed progression
+            increasePerFood: 0.2,   // Speed increase per food eaten
+            maxSpeed: 15,          // Maximum speed cap
+            initialSpeedBoost: 1.5, // Speed power-up multiplier
+            slowEffect: 0.5        // Slow power-up multiplier
+        }
+    }
+}
 ```
 
 ### Board Size Options
 
-1. **Preset Sizes**
-```javascript
-window.setGameConfig({
-    board: {
-        preset: 'medium'  // 'small', 'medium', or 'large'
-    }
-});
-```
+The game supports multiple board sizes that can be changed during gameplay:
 
-2. **Custom Dimensions**
 ```javascript
-window.setGameConfig({
+{
     board: {
-        preset: null,
-        custom: {
-            width: 800,    // Will be adjusted to nearest multiple of gridSize
-            height: 600,   // Will be adjusted to nearest multiple of gridSize
-            gridSize: 20
+        preset: 'fullscreen',  // Current preset: 'small', 'medium', 'large', or 'fullscreen'
+        presets: {
+            small: { width: 400, height: 400, cellSize: 20 },    // 20x20 grid
+            medium: { width: 800, height: 600, cellSize: 20 },   // 40x30 grid
+            large: { width: 1200, height: 800, cellSize: 20 },   // 60x40 grid
+            fullscreen: { width: "window.innerWidth", height: "window.innerHeight", cellSize: 50 }  // Custom cell size
         }
     }
-});
+}
 ```
+
+You can initialize the game in fullscreen with custom settings by either:
+
+1. Modifying the config before game starts:
+```javascript
+const config = {
+    board: {
+        preset: 'fullscreen',
+        presets: {
+            fullscreen: {
+                width: window.innerWidth,
+                height: window.innerHeight,
+                cellSize: 50  // Custom cell size
+            }
+        }
+    }
+};
+window.setGameConfig(config);
+```
+
+2. Or using the debug controls during gameplay:
+   - R: Toggle fullscreen mode
+   - Use + and - keys to adjust cell size to 50
+
+You can change the board size during gameplay using:
+- Q: Switch to small board
+- W: Switch to medium board
+- E: Switch to large board
+- R: Toggle fullscreen mode
 
 ### Sound Settings
 

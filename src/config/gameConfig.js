@@ -75,8 +75,8 @@ export const defaultConfig = {
         }
     },
     snake: {
-        initialLength: 4,
-        baseSpeed: 5,  // cells per second (will be overridden by difficulty)
+        initialLength: 3,  // Initial body segments (excluding head)
+        initialDirection: 'right',
         speedProgression: {
             enabled: true,
             increasePerFood: 0.2,    // Speed increase per food eaten
@@ -85,8 +85,27 @@ export const defaultConfig = {
             slowEffect: 0.5          // Multiplier for slow power-up
         },
         colors: {
-            head: '#4CAF50',
-            body: '#388E3C'
+            head: '#4CAF50',          // Vibrant green
+            body: '#2E7D32',          // Darker green base
+            highlight: '#A5D6A7',      // Soft mint highlight
+            shadow: '#1B5E20',         // Deep forest shadow
+            glow: 'rgba(76, 175, 80, 0.2)',  // Subtle green glow
+            eyes: '#FFFFFF',           // White eyes
+            pupil: '#000000',          // Black pupils
+            tongue: '#FF0000'          // Red tongue
+        },
+        segments: {
+            size: 0.85,               // Body segment size relative to cell size
+            headSize: 0.95,           // Head size relative to cell size
+            headLength: 2,            // Head length in cells
+            elevation: 3,             // Pixels to offset shadow for depth
+            cornerRadius: 4,          // Pixels for rounded corners
+            eyeSize: 4,              // Eye radius in pixels
+            pupilSize: 2,            // Pupil radius in pixels
+            tongueWidth: 0.1,         // Tongue width relative to cell size
+            tongueLength: 0.6,        // Tongue length relative to cell size
+            tongueWagRange: 0.2,      // Maximum tongue wag range relative to cell size
+            tongueSpeed: 200         // Milliseconds per tongue wag cycle
         },
         controls: {
             up: ['ArrowUp', 'w', 'W'],

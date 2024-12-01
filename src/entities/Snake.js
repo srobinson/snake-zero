@@ -4,49 +4,72 @@ export class Snake {
     constructor(grid, game) {
         this.grid = grid;
         this.game = game;
-        this.config = configManager.getConfig();
+        this.config = game.config;
+        this.effects = new Map();
         
         // Initialize base properties
-        this.baseSpeed = this.config.difficulty.presets[this.config.difficulty.current].baseSpeed || 5;
-        this.effects = new Map(); // type -> [{startTime, duration, multiplier}]
+        this.segments = [];
+        this.direction = this.config.snake.initialDirection || 'right';
+        this.nextDirection = this.direction;
         this.lastMoveTime = 0;
+        this.tongueWagTime = 0;
+        this.score = 0;
+        this.growing = false;
         this.foodEaten = 0;
         
-        // Initialize game state
+        // Get initial speed from difficulty settings
+        const difficultyBaseSpeed = this.config.difficulty.presets[this.config.difficulty.current].baseSpeed;
+        this.baseSpeed = difficultyBaseSpeed;
+        
+        // Initialize snake segments
         this.reset();
     }
 
     reset() {
-        // Initialize snake position
-        this.segments = [{
-            x: Math.floor(this.grid.getSize().width / 4),
-            y: Math.floor(this.grid.getSize().height / 2)
-        }];
-
-        // Add initial segments
-        for (let i = 1; i < this.config.snake.initialLength; i++) {
-            this.segments.push({
-                x: this.segments[0].x - i,
-                y: this.segments[0].y
-            });
+        const snakeConfig = this.config.snake;
+        const gridSize = this.grid.getSize();
+        
+        // Calculate center position
+        const centerX = Math.floor(gridSize.width / 2);
+        const centerY = Math.floor(gridSize.height / 2);
+        
+        // Clear segments array
+        this.segments = [];
+        
+        // Add head segments (always 2 cells)
+        this.segments.push(
+            { x: centerX, y: centerY },       // Front of head
+            { x: centerX - 1, y: centerY }    // Back of head
+        );
+        
+        // Add body segments
+        let currentX = centerX - 2; // Start after head segments
+        for (let i = 0; i < snakeConfig.initialLength; i++) {
+            this.segments.push({ x: currentX - i, y: centerY });
         }
 
-        // Reset movement state
-        this.direction = 'right';
-        this.nextDirection = 'right';
-        this.growing = false;
-        
-        // Reset timing and speed
+        // Reset other properties
+        this.direction = snakeConfig.initialDirection || 'right';
+        this.nextDirection = this.direction;
         this.lastMoveTime = 0;
-        this.moveInterval = 1000 / this.getCurrentSpeed();
-        this.currentSpeed = this.getCurrentSpeed();
+        this.tongueWagTime = 0;
+        this.score = 0;
+        this.growing = false;
         this.foodEaten = 0;
         
-        // Clear effects
+        // Reset speed to difficulty base speed
+        const difficultyBaseSpeed = this.config.difficulty.presets[this.config.difficulty.current].baseSpeed;
+        this.baseSpeed = difficultyBaseSpeed;
+        
         this.effects.clear();
     }
 
     update(currentTime) {
+        // Update tongue animation
+        const config = this.config.snake;
+        const tongueWagTime = currentTime % config.segments.tongueSpeed;
+        this.tongueWagTime = (tongueWagTime / config.segments.tongueSpeed) * Math.PI * 2;
+
         // Update effects first
         this.updateEffects();
 
@@ -57,7 +80,7 @@ export class Snake {
         }
 
         const elapsed = currentTime - this.lastMoveTime;
-        if (elapsed < this.moveInterval) {
+        if (elapsed < this.getMoveDelay()) {
             return false;
         }
 
@@ -112,12 +135,19 @@ export class Snake {
 
     grow() {
         this.growing = true;
+        this.foodEaten = (this.foodEaten || 0) + 1;
+        this.score += Math.round(10 * this.getPointsMultiplier());
+        
         if (this.config.snake.speedProgression.enabled) {
-            this.foodEaten++;
-            // Calculate new speed with progression using difficulty preset's baseSpeed
+            // Get current difficulty base speed
             const difficultyBaseSpeed = this.config.difficulty.presets[this.config.difficulty.current].baseSpeed;
+            
+            // Calculate speed increase
+            const speedIncrease = this.foodEaten * this.config.snake.speedProgression.increasePerFood;
+            
+            // Apply speed increase with maximum cap
             this.baseSpeed = Math.min(
-                difficultyBaseSpeed + (this.foodEaten * this.config.snake.speedProgression.increasePerFood),
+                difficultyBaseSpeed + speedIncrease,
                 this.config.snake.speedProgression.maxSpeed
             );
         }
@@ -162,54 +192,33 @@ export class Snake {
 
     addEffect(type) {
         const now = Date.now();
-        const config = this.config.powerUps.effects[type];
-        const duration = this.config.powerUps.duration;
+        const config = this.config.snake.speedProgression;
         
+        let effect = {
+            type,
+            startTime: now,
+            duration: this.config.powerUps.duration
+        };
+        
+        // Add effect-specific properties
+        switch(type) {
+            case 'speed':
+                effect.boost = config.initialSpeedBoost;
+                break;
+            case 'slow':
+                effect.boost = config.slowEffect;
+                break;
+            case 'points':
+                effect.multiplier = 2;
+                break;
+        }
+        
+        // Initialize or get the effect stack
         if (!this.effects.has(type)) {
             this.effects.set(type, []);
         }
         
-        const stacks = this.effects.get(type);
-        
-        // Add new effect
-        switch (type) {
-            case 'speed':
-                if (stacks.length < config.maxStacks) {
-                    stacks.push({
-                        startTime: now,
-                        duration: duration,
-                        boost: config.boost
-                    });
-                } else {
-                    // Refresh duration of last stack
-                    stacks[stacks.length - 1].startTime = now;
-                }
-                break;
-                
-            case 'ghost':
-                stacks.push({
-                    startTime: now,
-                    duration: duration
-                });
-                break;
-                
-            case 'points':
-                const currentMultiplier = stacks.length > 0 ? 
-                    stacks[stacks.length - 1].multiplier : 1;
-                const newMultiplier = Math.min(
-                    config.stackType === 'multiplicative' ? 
-                        currentMultiplier * config.multiplier : 
-                        currentMultiplier + config.multiplier,
-                    config.maxMultiplier
-                );
-                
-                stacks.push({
-                    startTime: now,
-                    duration: duration,
-                    multiplier: newMultiplier
-                });
-                break;
-        }
+        this.effects.get(type).push(effect);
     }
 
     updateEffects() {
@@ -233,11 +242,18 @@ export class Snake {
     getCurrentSpeed() {
         this.updateEffects();
         
+        // Ensure we have a valid base speed
+        if (typeof this.baseSpeed !== 'number' || isNaN(this.baseSpeed)) {
+            const difficultyBaseSpeed = this.config.difficulty.presets[this.config.difficulty.current].baseSpeed;
+            this.baseSpeed = difficultyBaseSpeed;
+        }
+        
         // Calculate speed boost from active effects
         const speedStacks = this.effects.get('speed') || [];
         const totalBoost = speedStacks.reduce((acc, effect) => acc * effect.boost, 1);
         
-        return this.baseSpeed * totalBoost;
+        // Return current speed with minimum of 1
+        return Math.max(1, this.baseSpeed * totalBoost);
     }
 
     getPointsMultiplier() {
@@ -265,21 +281,291 @@ export class Snake {
         ));
     }
 
-    draw(p5) {
-        // Draw snake segments
-        this.segments.forEach((segment, index) => {
-            const pos = this.grid.getCellCenter(segment);
-            p5.fill(index === 0 ? this.config.snake.colors.head : this.config.snake.colors.body);
-            p5.noStroke();
-            const size = this.grid.getCellSize(); 
-            p5.rect(pos.x - size/2, pos.y - size/2, size, size);
-        });
+    getMoveDelay() {
+        return 1000 / this.getCurrentSpeed();
+    }
 
-        // Draw speed vector if debug panel is visible
-        const debugConfig = configManager.getConfig().debug;
-        if (debugConfig.showVectors && this.game.debugPanel.visible) {
-            this.drawSpeedVector(p5);
+    draw(p5, time) {
+        const config = this.config.snake;
+        const cellSize = this.grid.getCellSize();
+        const tongueWagTime = time % config.segments.tongueSpeed;
+        const tongueWagPhase = (tongueWagTime / config.segments.tongueSpeed) * Math.PI * 2;
+        const tongueWag = Math.sin(tongueWagPhase) * config.segments.tongueWagRange;
+
+        // Draw snake segments
+        if (!this.segments || this.segments.length === 0) {
+            console.error('No segments to draw');
+            return;
         }
+
+        this.segments.forEach((segment, index) => {
+            if (!segment || typeof segment.x === 'undefined' || typeof segment.y === 'undefined') {
+                console.error('Invalid segment:', segment, 'at index:', index);
+                return;
+            }
+
+            const pos = this.grid.getCellCenter(segment);
+            if (!pos || typeof pos.x === 'undefined' || typeof pos.y === 'undefined') {
+                console.error('Invalid position:', pos, 'for segment:', segment);
+                return;
+            }
+
+            const isHead = index < config.segments.headLength;
+            const isHeadFront = index === 0;
+            const isHeadBack = index === 1;
+            
+            // Special handling for head segments
+            if (isHead) {
+                if (isHeadFront) {
+                    const headWidth = cellSize * config.segments.headSize;
+                    const headLength = cellSize * config.segments.headSize * 2;
+                    let x = pos.x, y = pos.y;
+                    
+                    // Adjust position based on direction
+                    switch(this.direction) {
+                        case 'left':
+                            x += cellSize/2;
+                            break;
+                        case 'right':
+                            x -= cellSize/2;
+                            break;
+                        case 'up':
+                            y += cellSize/2;
+                            break;
+                        case 'down':
+                            y -= cellSize/2;
+                            break;
+                    }
+                    
+                    // Draw head shadow
+                    p5.fill(config.colors.shadow);
+                    p5.noStroke();
+                    
+                    // Draw elongated head shadow
+                    switch(this.direction) {
+                        case 'left':
+                        case 'right':
+                            p5.rect(
+                                x - headLength/2 + config.segments.elevation,
+                                y - headWidth/2 + config.segments.elevation,
+                                headLength,
+                                headWidth,
+                                config.segments.cornerRadius
+                            );
+                            break;
+                        case 'up':
+                        case 'down':
+                            p5.rect(
+                                x - headWidth/2 + config.segments.elevation,
+                                y - headLength/2 + config.segments.elevation,
+                                headWidth,
+                                headLength,
+                                config.segments.cornerRadius
+                            );
+                            break;
+                    }
+                    
+                    // Draw main head shape
+                    p5.fill(config.colors.head);
+                    switch(this.direction) {
+                        case 'left':
+                        case 'right':
+                            p5.rect(
+                                x - headLength/2,
+                                y - headWidth/2,
+                                headLength,
+                                headWidth,
+                                config.segments.cornerRadius
+                            );
+                            break;
+                        case 'up':
+                        case 'down':
+                            p5.rect(
+                                x - headWidth/2,
+                                y - headLength/2,
+                                headWidth,
+                                headLength,
+                                config.segments.cornerRadius
+                            );
+                            break;
+                    }
+                    
+                    // Draw head highlights
+                    p5.fill(config.colors.highlight);
+                    switch(this.direction) {
+                        case 'left':
+                        case 'right':
+                            // Top edge highlight
+                            p5.rect(
+                                x - headLength/2,
+                                y - headWidth/2,
+                                headLength,
+                                2,
+                                config.segments.cornerRadius
+                            );
+                            break;
+                        case 'up':
+                        case 'down':
+                            // Left edge highlight
+                            p5.rect(
+                                x - headWidth/2,
+                                y - headLength/2,
+                                2,
+                                headLength,
+                                config.segments.cornerRadius
+                            );
+                            break;
+                    }
+
+                    // Draw eyes
+                    const eyeOffsetX = headWidth * 0.15;
+                    const eyeOffsetY = headWidth * 0.15;
+                    let leftEye, rightEye;
+                    
+                    switch(this.direction) {
+                        case 'up':
+                            leftEye = {x: x - eyeOffsetX, y: y - headLength/4};
+                            rightEye = {x: x + eyeOffsetX, y: y - headLength/4};
+                            break;
+                        case 'down':
+                            leftEye = {x: x + eyeOffsetX, y: y + headLength/4};
+                            rightEye = {x: x - eyeOffsetX, y: y + headLength/4};
+                            break;
+                        case 'left':
+                            leftEye = {x: x - headLength/4, y: y - eyeOffsetY};
+                            rightEye = {x: x - headLength/4, y: y + eyeOffsetY};
+                            break;
+                        case 'right':
+                            leftEye = {x: x + headLength/4, y: y - eyeOffsetY};
+                            rightEye = {x: x + headLength/4, y: y + eyeOffsetY};
+                            break;
+                    }
+                    
+                    // Draw eye whites
+                    p5.fill(config.colors.eyes);
+                    p5.circle(leftEye.x, leftEye.y, config.segments.eyeSize * 2);
+                    p5.circle(rightEye.x, rightEye.y, config.segments.eyeSize * 2);
+                    
+                    // Draw pupils
+                    p5.fill(config.colors.pupil);
+                    p5.circle(leftEye.x, leftEye.y, config.segments.pupilSize * 2);
+                    p5.circle(rightEye.x, rightEye.y, config.segments.pupilSize * 2);
+                    
+                    // Draw tongue
+                    const isMoving = time - this.lastMoveTime < this.getMoveDelay() * 0.5;
+                    const tongueWag = isMoving ? 
+                        tongueWag : 0;
+                    
+                    let tongueStart, tongueControl1, tongueControl2, tongueEnd;
+                    
+                    switch(this.direction) {
+                        case 'up':
+                            tongueStart = {x: x, y: y - headLength/2};
+                            tongueControl1 = {x: x + tongueWag/2, y: tongueStart.y - config.segments.tongueLength * 0.4};
+                            tongueControl2 = {x: x + tongueWag, y: tongueStart.y - config.segments.tongueLength * 0.7};
+                            tongueEnd = {x: x + tongueWag, y: tongueStart.y - config.segments.tongueLength};
+                            break;
+                        case 'down':
+                            tongueStart = {x: x, y: y + headLength/2};
+                            tongueControl1 = {x: x + tongueWag/2, y: tongueStart.y + config.segments.tongueLength * 0.4};
+                            tongueControl2 = {x: x + tongueWag, y: tongueStart.y + config.segments.tongueLength * 0.7};
+                            tongueEnd = {x: x + tongueWag, y: tongueStart.y + config.segments.tongueLength};
+                            break;
+                        case 'left':
+                            tongueStart = {x: x - headLength/2, y: y};
+                            tongueControl1 = {x: tongueStart.x - config.segments.tongueLength * 0.4, y: y + tongueWag/2};
+                            tongueControl2 = {x: tongueStart.x - config.segments.tongueLength * 0.7, y: y + tongueWag};
+                            tongueEnd = {x: tongueStart.x - config.segments.tongueLength, y: y + tongueWag};
+                            break;
+                        case 'right':
+                            tongueStart = {x: x + headLength/2, y: y};
+                            tongueControl1 = {x: tongueStart.x + config.segments.tongueLength * 0.4, y: y + tongueWag/2};
+                            tongueControl2 = {x: tongueStart.x + config.segments.tongueLength * 0.7, y: y + tongueWag};
+                            tongueEnd = {x: tongueStart.x + config.segments.tongueLength, y: y + tongueWag};
+                            break;
+                    }
+                    
+                    // Draw curved tongue
+                    p5.stroke(config.colors.tongue);
+                    p5.strokeWeight(config.segments.tongueWidth);
+                    p5.noFill();
+                    
+                    // Main tongue curve
+                    p5.beginShape();
+                    p5.vertex(tongueStart.x, tongueStart.y);
+                    p5.bezierVertex(
+                        tongueControl1.x, tongueControl1.y,
+                        tongueControl2.x, tongueControl2.y,
+                        tongueEnd.x, tongueEnd.y
+                    );
+                    p5.endShape();
+                    
+                    // Fork ends
+                    const forkLength = config.segments.tongueLength * 0.3;
+                    const forkAngle = Math.PI / 6; // 30 degrees
+                    
+                    const dx = tongueEnd.x - tongueControl2.x;
+                    const dy = tongueEnd.y - tongueControl2.y;
+                    const angle = Math.atan2(dy, dx);
+                    
+                    const fork1End = {
+                        x: tongueEnd.x + Math.cos(angle + forkAngle) * forkLength,
+                        y: tongueEnd.y + Math.sin(angle + forkAngle) * forkLength
+                    };
+                    
+                    const fork2End = {
+                        x: tongueEnd.x + Math.cos(angle - forkAngle) * forkLength,
+                        y: tongueEnd.y + Math.sin(angle - forkAngle) * forkLength
+                    };
+                    
+                    p5.line(tongueEnd.x, tongueEnd.y, fork1End.x, fork1End.y);
+                    p5.line(tongueEnd.x, tongueEnd.y, fork2End.x, fork2End.y);
+                    
+                    p5.noStroke();
+                }
+            } else {
+                // Draw body segments as before
+                const segmentSize = cellSize * config.segments.size;
+                
+                // Draw shadow
+                p5.fill(config.colors.shadow);
+                p5.noStroke();
+                p5.rect(
+                    pos.x - segmentSize/2 + config.segments.elevation,
+                    pos.y - segmentSize/2 + config.segments.elevation,
+                    segmentSize,
+                    segmentSize,
+                    config.segments.cornerRadius
+                );
+                
+                // Draw main segment
+                p5.fill(config.colors.body);
+                p5.rect(
+                    pos.x - segmentSize/2,
+                    pos.y - segmentSize/2,
+                    segmentSize,
+                    segmentSize,
+                    config.segments.cornerRadius
+                );
+                
+                // Draw highlights
+                p5.fill(config.colors.highlight);
+                p5.rect(
+                    pos.x - segmentSize/2,
+                    pos.y - segmentSize/2,
+                    segmentSize,
+                    2,
+                    config.segments.cornerRadius
+                );
+                p5.rect(
+                    pos.x - segmentSize/2,
+                    pos.y - segmentSize/2,
+                    2,
+                    segmentSize,
+                    config.segments.cornerRadius
+                );
+            }
+        });
     }
 
     drawSpeedVector(p5) {

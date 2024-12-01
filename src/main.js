@@ -10,7 +10,11 @@ import { EventSystem, GameEvents } from './core/EventSystem.js';
 
 class Game {
     constructor() {
+        // Load configuration first
+        configManager.loadFromLocalStorage();
         this.config = configManager.getConfig();
+        
+        // Initialize game components
         this.grid = new Grid(this.config);
         this.events = new EventSystem();
         this.stateMachine = new GameStateMachine(this);
@@ -19,8 +23,6 @@ class Game {
         this.food = new Food(this.grid);
         this.powerUp = null;
         
-        // Try to load saved configuration
-        configManager.loadFromLocalStorage();
         this.setupEventListeners();
     }
 
@@ -137,17 +139,12 @@ class Game {
 
     drawPauseOverlay() {
         const p5 = this.p5;
-        p5.fill(0, 0, 0, 150);
-        p5.rect(0, 0, this.grid.width, this.grid.height);
         
+        // Small pause indicator in top-right corner
         p5.fill(255);
-        p5.textSize(32);
-        p5.textAlign(p5.CENTER, p5.CENTER);
-        p5.text('PAUSED', this.grid.width/2, this.grid.height/2);
-        
         p5.textSize(16);
-        p5.text('Press P to Resume', this.grid.width/2, this.grid.height/2 + 40);
-        p5.text('Press ESC for Menu', this.grid.width/2, this.grid.height/2 + 70);
+        p5.textAlign(p5.RIGHT, p5.TOP);
+        p5.text('PAUSED', this.grid.width - 10, 10);
     }
 
     drawGameOver() {
@@ -193,7 +190,7 @@ class Game {
                 break;
             
             case GameStates.PLAYING:
-                if (key === 'p' || key === 'P') {
+                if (key === ' ') {
                     this.stateMachine.transition(GameStates.PAUSED);
                 } else if (key === 'Escape') {
                     this.stateMachine.transition(GameStates.MENU);
@@ -212,7 +209,7 @@ class Game {
                 break;
             
             case GameStates.PAUSED:
-                if (key === 'p' || key === 'P') {
+                if (key === ' ') {
                     this.stateMachine.transition(GameStates.PLAYING);
                 } else if (key === 'Escape') {
                     this.stateMachine.transition(GameStates.MENU);

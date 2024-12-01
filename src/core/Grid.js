@@ -76,7 +76,17 @@ export class Grid {
     }
 
     getCellCenter(cell) {
+        if (!cell || typeof cell.x === 'undefined' || typeof cell.y === 'undefined') {
+            console.error('Invalid cell:', cell);
+            return { x: 0, y: 0 }; // Return safe default
+        }
+        
         const pixelCoords = this.toPixelCoords(cell.x, cell.y);
+        if (!pixelCoords || typeof pixelCoords.x === 'undefined' || typeof pixelCoords.y === 'undefined') {
+            console.error('Invalid pixel coordinates for cell:', cell);
+            return { x: 0, y: 0 }; // Return safe default
+        }
+        
         return {
             x: pixelCoords.x + this.cellSize / 2,
             y: pixelCoords.y + this.cellSize / 2

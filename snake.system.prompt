@@ -11,7 +11,7 @@ Acknowledge you have ingested this file (print to console)
 # Change Process Requirements
 
 1. Before any changes:
-   - Review system.prompt
+   - Review snake.system.prompt
    - Check requirements.md
    - Review current README.md
    - Identify affected files

@@ -388,7 +388,7 @@ function touchStarted(event) {
 /**
  * Handles touch end event.
  * @param {Event & { changedTouches?: TouchList }} event - Touch event from browser
- * @returns {boolean} Whether the event was handled
+@param {Event & { touches?: TouchList }} event@param {Event & { touches?: TouchList }} event * @returns {boolean} Whether the event was handled
  */
 function touchEnded(event) {
     if (!event.changedTouches || !event.changedTouches[0]) return false;

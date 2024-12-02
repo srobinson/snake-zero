@@ -49,7 +49,7 @@ export class Food {
      * @returns {string} Hex color code
      */
     getRandomColor() {
-        const colors = this.config.colors;
+        const colors = Object.values(this.config.colors);
         const lastColor = this.color;
         let newColor;
         

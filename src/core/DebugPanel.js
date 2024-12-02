@@ -1,5 +1,10 @@
+// @ts-check
 import configManager from '../config/gameConfig.js';
 import { PowerUp } from '../entities/PowerUp.js';
+
+/** @typedef {import('../config/gameConfig.js').GameConfig} GameConfig */
+/** @typedef {import('../config/gameConfig.js').BoardConfig} BoardConfig */
+/** @typedef {'small' | 'medium' | 'large' | 'fullscreen'} BoardPreset */
 
 /**
  * @typedef {Object} DebugConfig
@@ -36,10 +41,6 @@ import { PowerUp } from '../entities/PowerUp.js';
  * @property {PowerUp} powerUp - Power-up entity
  * @property {Object} config - Game configuration
  * @property {() => void} recreate - Recreates the game with current config
- */
-
-/**
- * @typedef {'small'|'medium'|'large'|'fullscreen'} BoardPreset
  */
 
 /**
@@ -90,12 +91,11 @@ export class DebugPanel {
     constructor(game) {
         this.game = game;
         this.config = configManager.getConfig().debug;
-        this.enabled = this.config.enabled;
-        this.visible = this.enabled; // Make panel visible if debug is enabled
+        this.visible = this.config.enabled;
         this.lastFrameTime = 0;
         this.frameCount = 0;
         this.fps = 0;
-        this.fpsUpdateInterval = 500; // Update FPS every 500ms
+        this.fpsUpdateInterval = 500;
         this.lastFpsUpdate = 0;
     }
 
@@ -213,14 +213,11 @@ export class DebugPanel {
      * @param {number} currentTime - Current game time in milliseconds
      */
     update(currentTime) {
-        if (!this.enabled) return;
-
-        // Update FPS calculation
         this.frameCount++;
-        if (currentTime - this.lastFpsUpdate >= this.fpsUpdateInterval) {
+        if (currentTime - this.lastFpsUpdate > this.fpsUpdateInterval) {
             this.fps = Math.round((this.frameCount * 1000) / (currentTime - this.lastFpsUpdate));
-            this.lastFpsUpdate = currentTime;
             this.frameCount = 0;
+            this.lastFpsUpdate = currentTime;
         }
     }
 
@@ -361,18 +358,28 @@ export class DebugPanel {
 
     /**
      * Changes the game board size
-     * @param {BoardPreset} preset - Board size preset
+     * @param {'small' | 'medium' | 'large' | 'fullscreen'} preset - The preset to use
      */
     changeBoardSize(preset) {
-        // Update config
-        const config = configManager.getConfig();
-        config.board.preset = preset;
+        // Start with current config to maintain required fields
+        const currentConfig = configManager.getConfig();
+        const config = {
+            ...currentConfig,
+            board: {
+                ...currentConfig.board,
+                preset
+            }
+        };
 
-        // Update fullscreen dimensions if needed
         if (preset === 'fullscreen') {
-            config.board.presets.fullscreen.width = window.innerWidth;
-            config.board.presets.fullscreen.height = window.innerHeight;
+            // Calculate dimensions based on window size and cell size
+            const cellSize = currentConfig.board.cellSize;
+            config.board.width = Math.floor(window.innerWidth / cellSize);
+            config.board.height = Math.floor(window.innerHeight / cellSize);
         }
+
+        // configManager.updateRuntime(config);
+        this.game.config = config;
 
         // Recreate game with new size
         this.game.recreate();

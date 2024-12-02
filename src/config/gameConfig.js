@@ -1,4 +1,4 @@
-import { validateConfig, deepMerge, validationRules } from '../utils/configValidator.js';
+import { validateConfig, deepMerge, validationRules } from './configValidator.js';
 import { applyDataAttributes } from '../utils/dataAttributeParser.js';
 
 // Type definitions
@@ -125,12 +125,14 @@ import { applyDataAttributes } from '../utils/dataAttributeParser.js';
  * @property {Object} speed - Speed power-up settings
  * @property {Object} ghost - Ghost power-up settings
  * @property {Object} points - Points power-up settings
+ * @property {Object} slow - Slow power-up settings
  */
 
 /** @typedef {Object} PowerUpColors
  * @property {string} speed - Speed power-up color
  * @property {string} ghost - Ghost power-up color
  * @property {string} points - Points power-up color
+ * @property {string} slow - Slow power-up color
  */
 
 /** @typedef {'speed'|'ghost'|'points'|'slow'} PowerUpType */
@@ -144,13 +146,26 @@ import { applyDataAttributes } from '../utils/dataAttributeParser.js';
  */
 
 /** @typedef {Object} FoodConfig
- * @property {Object} colors - Food color configuration
- * @property {string[]} colors - Array of food colors
+ * @property {string[]} types - Types of food available in the game
+ * @property {Object} spawnRates - Spawn rates for each food type
+ * @property {number} spawnRates.regular - Spawn rate for regular food
+ * @property {number} spawnRates.bonus - Spawn rate for bonus food
+ * @property {number} spawnRates.golden - Spawn rate for golden food
+ * @property {Object} points - Points awarded for each food type
+ * @property {number} points.regular - Points for regular food
+ * @property {number} points.bonus - Points for bonus food
+ * @property {number} points.golden - Points for golden food
+ * @property {Object} colors - Colors for each food type
+ * @property {string} colors.regular - Color for regular food
+ * @property {string} colors.bonus - Color for bonus food
+ * @property {string} colors.golden - Color for golden food
  */
 
 /** @typedef {Object} ScoringConfig
  * @property {number} basePoints - Base points awarded for collecting food
  * @property {number} multiplierIncrease - How much the multiplier increases per food collected
+ * @property {Array<{threshold: number, multiplier: number}>} multiplierRules - Rules for score multipliers
+ * @property {Array<{type: string, bonus: number}>} bonusConditions - Conditions for bonus points
  */
 
 /** @typedef {Object} GameConfig
@@ -161,6 +176,14 @@ import { applyDataAttributes } from '../utils/dataAttributeParser.js';
  * @property {PowerUpConfig} powerUps - Power-up settings
  * @property {FoodConfig} food - Food configuration
  * @property {ScoringConfig} scoring - Scoring configuration
+ */
+
+// Type definitions for partial configurations
+/** @typedef {Partial<BoardConfig>} PartialBoardConfig */
+/** @typedef {Partial<DifficultyConfig>} PartialDifficultyConfig */
+/** @typedef {Object} PartialGameConfig
+ * @property {PartialBoardConfig} [board]
+ * @property {PartialDifficultyConfig} [difficulty]
  */
 
 /**
@@ -199,7 +222,7 @@ export const defaultConfig = {
         textColor: '#ffffff',
         fontSize: 14,
         padding: 10,
-        shortcutKey: ['`', 'd'],
+        shortcutKey: ['`'],  
         controls: {
             spawn: {
                 speed: '1',
@@ -294,41 +317,84 @@ export const defaultConfig = {
             tongueWagRange: 0
         },
         controls: {
-            up: ['ArrowUp', 'w', 'W'],
-            down: ['ArrowDown', 's', 'S'],
-            left: ['ArrowLeft', 'a', 'A'],
-            right: ['ArrowRight', 'd', 'D']
+            up: ['ArrowUp', 'w'],
+            down: ['ArrowDown', 's'],
+            left: ['ArrowLeft', 'a'],
+            right: ['ArrowRight', 'd']
         }
     },
     powerUps: {
-        types: ['speed', 'ghost', 'points'],
+        types: ['speed', 'ghost', 'points', 'slow'],  
         spawnChance: 0.01,
         duration: 10000,
         effects: {
             speed: {
-                multiplier: 1.5,
+                speedMultiplier: 1.5,
+                ghostMode: false,
+                pointsMultiplier: 1.0,
+                slowMultiplier: 1.0,
                 duration: 5000
             },
             ghost: {
+                speedMultiplier: 1.0,
+                ghostMode: true,
+                pointsMultiplier: 1.0,
+                slowMultiplier: 1.0,
                 duration: 8000
             },
             points: {
-                multiplier: 2,
+                speedMultiplier: 1.0,
+                ghostMode: false,
+                pointsMultiplier: 2.0,
+                slowMultiplier: 1.0,
                 duration: 10000
+            },
+            slow: {
+                speedMultiplier: 1.0,
+                ghostMode: false,
+                pointsMultiplier: 1.0,
+                slowMultiplier: 0.5,
+                duration: 5000
             }
         },
         colors: {
             speed: '#ff0000',
             ghost: '#00ffff',
-            points: '#ffff00'
+            points: '#ffff00',
+            slow: '#FF5722'
         }
     },
     food: {
-        colors: ['#E91E63', '#9C27B0', '#673AB7', '#3F51B5', '#2196F3']
+        types: ['regular', 'bonus', 'golden'],  
+        spawnRates: {
+            regular: 0.6,
+            bonus: 0.3,
+            golden: 0.1
+        },
+        points: {
+            regular: 10,
+            bonus: 20,
+            golden: 50
+        },
+        colors: {
+            regular: '#E91E63',
+            bonus: '#9C27B0',
+            golden: '#FFD700'
+        }
     },
     scoring: {
         basePoints: 10,
-        multiplierIncrease: 0.1
+        multiplierIncrease: 0.1,
+        multiplierRules: [
+            { threshold: 5, multiplier: 1.5 },
+            { threshold: 10, multiplier: 2.0 },
+            { threshold: 20, multiplier: 3.0 }
+        ],
+        bonusConditions: [
+            { type: 'speed', bonus: 100 },
+            { type: 'noWalls', bonus: 50 },
+            { type: 'perfectRun', bonus: 25 }
+        ]
     }
 };
 
@@ -373,10 +439,22 @@ function compareObjects(current, def, path = '') {
                 diff[key] = nestedDiff;
             }
         } else if (currentValue !== defaultValue) {
-            diff[key] = currentValue;
+            if (!path) {
+                diff[key] = currentValue;
+            } else {
+                let target = diff;
+                const parts = path.split('.');
+                parts.forEach((part, index) => {
+                    if (index === parts.length - 1) {
+                        target[key] = currentValue;
+                    } else {
+                        target[part] = target[part] || {};
+                        target = target[part];
+                    }
+                });
+            }
         }
     }
-
     return diff;
 }
 
@@ -396,133 +474,15 @@ export class ConfigManager {
             dataAttributes: null
         };
         
-        /** @type {GameConfig} */
+        /** @type {PartialGameConfig} */
         this.config = {
-            debug: {
-                enabled: false,
-                showFPS: false,
-                showSnakeInfo: false,
-                showGridInfo: false,
-                showEffects: false,
-                showControls: false,
-                showVectors: false,
-                position: 'top-right',
-                backgroundColor: '#000000',
-                textColor: '#ffffff',
-                fontSize: 12,
-                padding: 10,
-                shortcutKey: ['F3'],
-                controls: {
-                    spawn: {
-                        speed: 'KeyS',
-                        ghost: 'KeyG',
-                        points: 'KeyP'
-                    },
-                    snake: {
-                        grow: 'KeyR'
-                    },
-                    board: {
-                        small: 'Digit1',
-                        medium: 'Digit2',
-                        large: 'Digit3',
-                        fullscreen: 'KeyF'
-                    },
-                    grid: {
-                        increaseCellSize: 'Equal',
-                        decreaseCellSize: 'Minus'
-                    }
-                },
-                vectors: {
-                    color: '#ff0000',
-                    thickness: 2,
-                    headLength: 10,
-                    opacity: 0.7,
-                    scale: 20
-                }
-            },
             board: {
-                preset: 'medium',
-                presets: {
-                    small: { width: 400, height: 300, cellSize: 20 },
-                    medium: { width: 800, height: 600, cellSize: 20 },
-                    large: { width: 1200, height: 900, cellSize: 20 }
-                },
-                width: 800,
-                height: 600,
-                cellSize: 20,
-                backgroundColor: '#ffffff',
-                gridColor: '#e0e0e0'
+                preset: 'medium',  // Can be customized via data-snake-board-size
+                cellSize: 20,     // Can be customized via data-snake-cell-size
+                presets: JSON.parse(JSON.stringify(defaultConfig.board.presets))  // Required for data attributes
             },
             difficulty: {
-                current: 'normal',
-                presets: {
-                    easy: { baseSpeed: 3, powerUpChance: 0.3 },
-                    normal: { baseSpeed: 5, powerUpChance: 0.2 },
-                    hard: { baseSpeed: 7, powerUpChance: 0.1 }
-                }
-            },
-            snake: {
-                initialLength: 3,
-                initialDirection: 'right',
-                baseSpeed: 5,
-                speedProgression: {
-                    enabled: false,
-                    increasePerFood: 0.1,
-                    maxSpeed: 10,
-                    initialSpeedBoost: 1.5,
-                    slowEffect: 0.5
-                },
-                colors: {
-                    head: '#4CAF50',
-                    body: '#81C784',
-                    highlight: '#A5D6A7',
-                    shadow: '#2E7D32',
-                    glow: '#B9F6CA',
-                    eyes: '#FFFFFF',
-                    pupil: '#000000',
-                    tongue: '#FF1744'
-                },
-                segments: {
-                    size: 0.8,
-                    headSize: 1,
-                    headLength: 1,
-                    elevation: 0,
-                    cornerRadius: 0,
-                    eyeSize: 0,
-                    pupilSize: 0,
-                    tongueLength: 0,
-                    tongueWidth: 0,
-                    tongueSpeed: 0,
-                    tongueWagRange: 0
-                },
-                controls: {
-                    up: ['ArrowUp', 'KeyW'],
-                    down: ['ArrowDown', 'KeyS'],
-                    left: ['ArrowLeft', 'KeyA'],
-                    right: ['ArrowRight', 'KeyD']
-                }
-            },
-            powerUps: {
-                types: ['speed', 'ghost', 'points'],
-                spawnChance: 0.2,
-                duration: 5000,
-                effects: {
-                    speed: {},
-                    ghost: {},
-                    points: {}
-                },
-                colors: {
-                    speed: '#FFD700',
-                    ghost: '#4527A0',
-                    points: '#00BCD4'
-                }
-            },
-            food: {
-                colors: ['#E91E63', '#9C27B0', '#673AB7', '#3F51B5', '#2196F3']
-            },
-            scoring: {
-                basePoints: 10,
-                multiplierIncrease: 0.1
+                current: 'normal'  // Can be customized via data-snake-difficulty
             }
         };
         
@@ -539,8 +499,20 @@ export class ConfigManager {
      * Load default configuration
      */
     loadDefaultConfig() {
-        this.sources.default = { ...defaultConfig };
-        this.config = { ...defaultConfig };
+        // Deep copy the default config to sources.default
+        this.sources.default = JSON.parse(JSON.stringify(defaultConfig));
+        
+        // Initialize config with required fields
+        this.config = {
+            board: {
+                preset: 'medium',
+                cellSize: 20,
+                presets: JSON.parse(JSON.stringify(defaultConfig.board.presets))
+            },
+            difficulty: {
+                current: 'normal'
+            }
+        };
     }
 
     /**
@@ -552,13 +524,6 @@ export class ConfigManager {
             if (!saved) return;
 
             const savedConfig = JSON.parse(saved);
-            
-            // Validate saved configuration
-            const errors = validateConfig(savedConfig);
-            if (errors.length > 0) {
-                console.warn('Saved configuration validation errors:', errors);
-                return;
-            }
 
             // Store valid localStorage config
             this.sources.localStorage = savedConfig;
@@ -589,29 +554,119 @@ export class ConfigManager {
 
     /**
      * Merge configurations according to priority
+     * Order: default (lowest) -> localStorage -> data attributes -> runtime changes (highest)
      */
     mergeConfigurations() {
-        // Start with default configuration
-        this.config = { ...this.sources.default };
-
-        // Merge localStorage config (middle priority)
+        this.config = JSON.parse(JSON.stringify(this.sources.default));
+        
         if (this.sources.localStorage) {
             this.config = deepMerge(this.config, this.sources.localStorage);
         }
-
-        // Merge data attributes config (highest priority)
+        
         if (this.sources.dataAttributes) {
             this.config = deepMerge(this.config, this.sources.dataAttributes);
         }
+    }
 
-        // Final validation of merged configuration
-        const errors = validateConfig(this.config);
-        if (errors.length > 0) {
-            console.error('Final configuration validation errors:', errors);
-            // Fallback to default configuration
-            this.config = { ...this.sources.default };
-            console.warn('Falling back to default configuration');
+    /**
+     * Reset the configuration to its default state
+     */
+    reset() {
+        // Clear all configuration sources
+        this.sources.localStorage = null;
+        this.sources.dataAttributes = null;
+        
+        // Reset to default configuration using deep copy
+        this.config = JSON.parse(JSON.stringify(this.sources.default));
+        
+        // Clear localStorage
+        localStorage.removeItem('snakeGameConfig');
+    }
+
+    /**
+     * Save persistent settings (board preset, cell size, difficulty) to localStorage
+     * @param {Partial<GameConfig>} configChanges Changes to be persisted
+     * @private
+     */
+    savePersistentSettings(configChanges) {
+        // Get existing storage config
+        let storageConfig;
+        try {
+            const savedConfig = localStorage.getItem('snakeGameConfig');
+            storageConfig = savedConfig ? JSON.parse(savedConfig) : {};
+        } catch (error) {
+            console.error('Failed to load existing configuration:', error);
+            storageConfig = {};
         }
+
+        // Handle board changes
+        if (configChanges.board) {
+            if (!storageConfig.board) storageConfig.board = {};
+            
+            // Save board preset if changed
+            if (configChanges.board.preset) {
+                storageConfig.board.preset = configChanges.board.preset;
+            }
+            
+            // Save cell size if changed
+            if (configChanges.board.cellSize !== undefined) {
+                storageConfig.board.cellSize = configChanges.board.cellSize;
+            }
+        }
+
+        // Handle difficulty changes
+        if (configChanges.difficulty?.current) {
+            if (!storageConfig.difficulty) storageConfig.difficulty = {};
+            storageConfig.difficulty.current = configChanges.difficulty.current;
+        }
+
+        // Save to localStorage
+        try {
+            localStorage.setItem('snakeGameConfig', JSON.stringify(storageConfig));
+        } catch (error) {
+            console.error('Failed to save configuration:', error);
+        }
+    }
+
+    /**
+     * Override the current configuration with a custom configuration
+     * This method handles runtime changes which take highest priority
+     * @param {Partial<GameConfig>} customConfig Custom configuration to override with
+     * @returns {boolean} Whether the override was successful
+     */
+    override(customConfig) {
+        // Deep copy the custom config to prevent reference sharing
+        const configCopy = JSON.parse(JSON.stringify(customConfig));
+        
+        // Validate custom configuration as a partial update
+        const validationResult = validateConfig(configCopy, validationRules, true);
+        if (validationResult.errors.length > 0) {
+            console.error('Custom configuration validation errors:', validationResult.errors);
+            return false;
+        }
+
+        // For board preset changes, apply preset values
+        if (configCopy.board?.preset) {
+            const preset = configCopy.board.preset;
+            const defaultPreset = this.sources.default.board.presets[preset];
+            
+            configCopy.board = {
+                ...this.config.board,
+                preset,
+                width: defaultPreset.width,
+                height: defaultPreset.height,
+                cellSize: defaultPreset.cellSize,
+                ...configCopy.board
+            };
+        }
+
+        // Apply changes to runtime config
+        this.config = deepMerge(this.config, configCopy);
+
+        // Save persistent settings
+        this.savePersistentSettings(configCopy);
+        
+        return true;
     }
 
     /**
@@ -619,40 +674,8 @@ export class ConfigManager {
      * @returns {GameConfig} Current configuration
      */
     getConfig() {
-        return this.config;
-    }
-
-    /**
-     * Override the current configuration with a custom configuration
-     * @param {GameConfig} customConfig Custom configuration to override with
-     * @returns {boolean} Whether the override was successful
-     */
-    override(customConfig) {
-        // Validate custom configuration
-        const errors = validateConfig(customConfig);
-        if (errors.length > 0) {
-            console.error('Custom configuration validation errors:', errors);
-            return false;
-        }
-
-        // Apply override with highest priority
-        this.config = deepMerge(this.config, customConfig);
-        return true;
-    }
-
-    /**
-     * Reset the configuration to its default state
-     */
-    reset() {
-        // Clear all sources except default
-        this.sources.localStorage = null;
-        this.sources.dataAttributes = null;
-        
-        // Reset to default configuration
-        this.config = { ...this.sources.default };
-        
-        // Clear localStorage
-        localStorage.removeItem('snakeGameConfig');
+        // Ensure we have a complete config by merging with defaults
+        return deepMerge(JSON.parse(JSON.stringify(defaultConfig)), this.config);
     }
 
     /**
@@ -661,10 +684,10 @@ export class ConfigManager {
      */
     saveToLocalStorage() {
         try {
-            // Only save non-default values
-            const diffConfig = this.getDifferenceFromDefault();
-            if (Object.keys(diffConfig).length > 0) {
-                localStorage.setItem('snakeGameConfig', JSON.stringify(diffConfig));
+            if (this.sources.localStorage) {
+                // Create a clean copy before saving
+                const cleanConfig = JSON.parse(JSON.stringify(this.sources.localStorage));
+                localStorage.setItem('snakeGameConfig', JSON.stringify(cleanConfig));
             } else {
                 localStorage.removeItem('snakeGameConfig');
             }
@@ -676,59 +699,11 @@ export class ConfigManager {
     }
 
     /**
-     * Get the difference between the current configuration and the default configuration
-     * @returns {Partial<GameConfig>} Difference between current and default configurations
-     */
-    getDifferenceFromDefault() {
-        /** @type {Partial<GameConfig>} */
-        const diff = {};
-        
-        const compareObjects = (current, def, path = '') => {
-            for (const key in current) {
-                const currentValue = current[key];
-                const defaultValue = def[key];
-                const newPath = path ? `${path}.${key}` : key;
-
-                if (typeof currentValue === 'object' && currentValue !== null &&
-                    typeof defaultValue === 'object' && defaultValue !== null) {
-                    const subDiff = compareObjects(currentValue, defaultValue, newPath);
-                    if (Object.keys(subDiff).length > 0) {
-                        diff[key] = subDiff;
-                    }
-                } else if (currentValue !== defaultValue) {
-                    if (!path) {
-                        diff[key] = currentValue;
-                    } else {
-                        let target = diff;
-                        const parts = path.split('.');
-                        parts.forEach((part, index) => {
-                            if (index === parts.length - 1) {
-                                target[key] = currentValue;
-                            } else {
-                                target[part] = target[part] || {};
-                                target = target[part];
-                            }
-                        });
-                    }
-                }
-            }
-            return diff;
-        };
-
-        return compareObjects(this.config, this.sources.default);
-    }
-
-    /**
      * Get the configuration sources
      * @returns {Object} Configuration sources
      */
     getConfigurationSources() {
-        return {
-            default: this.sources.default,
-            localStorage: this.sources.localStorage,
-            dataAttributes: this.sources.dataAttributes,
-            final: this.config
-        };
+        return this.sources;
     }
 }
 

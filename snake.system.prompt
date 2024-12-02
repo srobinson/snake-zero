@@ -1,18 +1,21 @@
 Always use config values
 When creating a new value, create it in the config file
 Ensure all config values are used, list unused values
-Use ./requirements.md as a reminder of our main goals
+Ensure all functions are used, list unused functions
+Read ./requirements.md as a reminder of our main goals
+Read ./suggestions.md for next step ideas
+
 Always examine full codebase before making a change unless absolutely certain the change is local and safe
 After making big changes, reexamine the codebase to make sure it still works
 Always ensure ./README.md is up to date and accurate
-Follow CONTRIBUTING.md checklist for all changes
+Follow ./CONTRIBUTING.md checklist for all changes
 Acknowledge you have ingested this file (print to console)
 
 # Change Process Requirements
 
 1. Before any changes:
    - Review snake.system.prompt
-   - Check requirements.md
+   - Check ./requirements.md
    - Review current README.md
    - Identify affected files
 

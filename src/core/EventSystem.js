@@ -11,6 +11,8 @@
  * @property {Object} [position] - Position data for collision/collection events
  * @property {number} position.x - X coordinate
  * @property {number} position.y - Y coordinate
+ * @property {number} [points] - Points value for FOOD_COLLECTED event
+ * @property {number} [multiplier] - Points multiplier for FOOD_COLLECTED event
  */
 
 /**

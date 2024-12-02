@@ -24,15 +24,31 @@
  * @property {boolean} [ghostMode] - Ghost mode enabled for ghost power-up
  * @property {number} [pointsMultiplier] - Points multiplier for points power-up
  * @property {number} [slowMultiplier] - Speed reduction for slow power-up
+ * @property {number} duration - Duration of the effect in milliseconds
+ */
+
+/**
+ * @typedef {Object} PowerUpVisualConfig
+ * @property {number} baseSize - Size relative to cell size
+ * @property {number} floatSpeed - Speed of floating animation
+ * @property {number} floatAmount - Pixels to float up/down
+ * @property {number} rotateSpeed - Speed of crystal rotation
+ * @property {number} glowAmount - Pixel blur for glow effect
+ * @property {number} shimmerCount - Number of shimmer particles
+ * @property {number} shimmerSpeed - Speed of shimmer rotation
+ * @property {number} shimmerSize - Size of shimmer particles
+ * @property {number} energyCount - Number of energy field particles
+ * @property {number} energySpeed - Speed of energy field rotation
+ * @property {number} iconSize - Icon size relative to cell size
  */
 
 /**
  * @typedef {Object} PowerUpConfig
  * @property {PowerUpType[]} types - Available power-up types
  * @property {number} spawnChance - Chance of spawning a power-up (0-1)
- * @property {number} duration - Default duration of power-up effects
  * @property {Record<PowerUpType, PowerUpEffectConfig>} effects - Effect configurations per type
  * @property {PowerUpColors} colors - Colors for each power-up type
+ * @property {PowerUpVisualConfig} visual - Visual configuration for rendering
  */
 
 /**
@@ -55,16 +71,20 @@ export const PowerUpTypes = /** @type {const} */ ({
  */
 export const DefaultEffectConfigs = {
     speed: {
-        speedMultiplier: 1.5
+        speedMultiplier: 1.5,
+        duration: 5000
     },
     ghost: {
-        ghostMode: true
+        ghostMode: true,
+        duration: 3000
     },
     points: {
-        pointsMultiplier: 2.0
+        pointsMultiplier: 2.0,
+        duration: 2000
     },
     slow: {
-        slowMultiplier: 0.5
+        slowMultiplier: 0.5,
+        duration: 4000
     }
 };
 

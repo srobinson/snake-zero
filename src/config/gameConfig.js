@@ -14,6 +14,7 @@ import { applyDataAttributes } from '../utils/dataAttributeParser.js';
  * @property {string} spawn.speed - Speed spawn key
  * @property {string} spawn.ghost - Ghost spawn key
  * @property {string} spawn.points - Points spawn key
+ * @property {string} spawn.slow - Slow spawn key
  * @property {Object} snake - Snake control keys
  * @property {string} snake.grow - Grow snake key
  * @property {Object} board - Board control keys
@@ -119,6 +120,23 @@ import { applyDataAttributes } from '../utils/dataAttributeParser.js';
  * @property {SnakeColors} colors - Snake color scheme
  * @property {SnakeSegments} segments - Snake segment size settings
  * @property {SnakeControls} controls - Snake movement controls
+ * @property {Object} effects - Power-up visual effects
+ * @property {Object} effects.speed - Speed power-up visual effects
+ * @property {number} effects.speed.lineLength - Relative to cell size
+ * @property {number} effects.speed.lineOpacity - Opacity of the line
+ * @property {number} effects.speed.lineWidth - Width of the line
+ * @property {Object} effects.ghost - Ghost power-up visual effects
+ * @property {number} effects.ghost.opacity - Opacity of the ghost effect
+ * @property {number} effects.ghost.glowRadius - Radius of the glow effect
+ * @property {string} effects.ghost.glowColor - Color of the glow effect
+ * @property {Object} effects.points - Points power-up visual effects
+ * @property {number} effects.points.sparkleChance - Chance of sparkles appearing
+ * @property {number} effects.points.sparkleSize - Relative to cell size
+ * @property {number} effects.points.sparkleOpacity - Opacity of the sparkles
+ * @property {Object} effects.slow - Slow power-up visual effects
+ * @property {number} effects.slow.waveAmplitude - Relative to cell size
+ * @property {number} effects.slow.waveFrequency - Frequency of the wave
+ * @property {number} effects.slow.waveSpeed - Speed of the wave
  */
 
 /** @typedef {Object} PowerUpEffects
@@ -135,30 +153,80 @@ import { applyDataAttributes } from '../utils/dataAttributeParser.js';
  * @property {string} slow - Slow power-up color
  */
 
+/** @typedef {Object} PowerUpVisual
+ * @property {number} baseSize - Size relative to cell size
+ * @property {number} floatSpeed - Speed of floating animation
+ * @property {number} floatAmount - Pixels to float up/down
+ * @property {number} rotateSpeed - Speed of crystal rotation
+ * @property {number} glowAmount - Pixel blur for glow effect
+ * @property {number} shimmerCount - Number of shimmer particles
+ * @property {number} shimmerSpeed - Speed of shimmer rotation
+ * @property {number} shimmerSize - Size of shimmer particles
+ * @property {number} energyCount - Number of energy field particles
+ * @property {number} energySpeed - Speed of energy field rotation
+ * @property {number} iconSize - Icon size relative to cell size
+ */
+
 /** @typedef {'speed'|'ghost'|'points'|'slow'} PowerUpType */
 
 /** @typedef {Object} PowerUpConfig
  * @property {PowerUpType[]} types - Available power-up types
  * @property {number} spawnChance - Chance of power-up spawning
- * @property {number} duration - Base duration of power-ups
  * @property {PowerUpEffects} effects - Power-up effect configurations
  * @property {PowerUpColors} colors - Power-up colors
+ * @property {PowerUpVisual} visual - Power-up visual configurations
+ */
+
+/** @typedef {Object} FoodColors
+ * @property {string} primary - Primary color
+ * @property {string} secondary - Secondary color
+ * @property {string} highlight - Highlight color
+ */
+
+/** @typedef {Object} FoodEffects
+ * @property {Object} bounceSpeed - Bounce animation speed for each food type
+ * @property {number} bounceSpeed.regular - Regular food bounce speed in ms
+ * @property {number} bounceSpeed.bonus - Bonus food bounce speed in ms
+ * @property {number} bounceSpeed.golden - Golden food bounce speed in ms
+ * @property {Object} sparkleSpeed - Sparkle animation speed for each food type
+ * @property {number} sparkleSpeed.regular - Regular food sparkle speed in ms
+ * @property {number} sparkleSpeed.bonus - Bonus food sparkle speed in ms
+ * @property {number} sparkleSpeed.golden - Golden food sparkle speed in ms
+ * @property {Object} pixelSize - Pixel size relative to cell size for each food type
+ * @property {number} pixelSize.regular - Regular food pixel size
+ * @property {number} pixelSize.bonus - Bonus food pixel size
+ * @property {number} pixelSize.golden - Golden food pixel size
+ * @property {Object} glow - Glow effect settings for each food type
+ * @property {Object} outlineWeight - Outline thickness for each food type
+ * @property {number} outlineWeight.regular - Regular food outline thickness
+ * @property {number} outlineWeight.bonus - Bonus food outline thickness
+ * @property {number} outlineWeight.golden - Golden food outline thickness
  */
 
 /** @typedef {Object} FoodConfig
- * @property {string[]} types - Types of food available in the game
- * @property {Object} spawnRates - Spawn rates for each food type
- * @property {number} spawnRates.regular - Spawn rate for regular food
- * @property {number} spawnRates.bonus - Spawn rate for bonus food
- * @property {number} spawnRates.golden - Spawn rate for golden food
- * @property {Object} points - Points awarded for each food type
- * @property {number} points.regular - Points for regular food
- * @property {number} points.bonus - Points for bonus food
- * @property {number} points.golden - Points for golden food
- * @property {Object} colors - Colors for each food type
- * @property {string} colors.regular - Color for regular food
- * @property {string} colors.bonus - Color for bonus food
- * @property {string} colors.golden - Color for golden food
+ * @property {Array<'regular'|'bonus'|'golden'>} types - Available food types
+ * @property {Object} spawnRates - Spawn probability for each food type
+ * @property {number} spawnRates.regular - Regular food spawn rate
+ * @property {number} spawnRates.bonus - Bonus food spawn rate
+ * @property {number} spawnRates.golden - Golden food spawn rate
+ * @property {Object} points - Point values for each food type
+ * @property {number} points.regular - Regular food points
+ * @property {number} points.bonus - Bonus food points
+ * @property {number} points.golden - Golden food points
+ * @property {Object} colors - Color configurations for each food type
+ * @property {Object} colors.regular - Regular food colors
+ * @property {string} colors.regular.primary - Primary color
+ * @property {string} colors.regular.secondary - Secondary color
+ * @property {string} colors.regular.highlight - Highlight color
+ * @property {Object} colors.bonus - Bonus food colors
+ * @property {string} colors.bonus.primary - Primary color
+ * @property {string} colors.bonus.secondary - Secondary color
+ * @property {string} colors.bonus.highlight - Highlight color
+ * @property {Object} colors.golden - Golden food colors
+ * @property {string} colors.golden.primary - Primary color
+ * @property {string} colors.golden.secondary - Secondary color
+ * @property {string} colors.golden.highlight - Highlight color
+ * @property {FoodEffects} effects - Visual effects for food types
  */
 
 /** @typedef {Object} ScoringConfig
@@ -166,6 +234,20 @@ import { applyDataAttributes } from '../utils/dataAttributeParser.js';
  * @property {number} multiplierIncrease - How much the multiplier increases per food collected
  * @property {Array<{threshold: number, multiplier: number}>} multiplierRules - Rules for score multipliers
  * @property {Array<{type: string, bonus: number}>} bonusConditions - Conditions for bonus points
+ */
+
+/**
+ * @typedef {Object} PowerupBadgeConfig
+ * @property {number} duration - Duration of the badge effect
+ * @property {number} popInDuration - Duration of the pop-in animation
+ * @property {number} popInScale - Scale factor for pop-in animation
+ * @property {number} spacing - Spacing between badges as percentage of cell size
+ * @property {number} size - Size multiplier relative to cell size
+ * @property {number} floatingSize - Size multiplier for floating badges
+ * @property {number} hoverAmplitude - Amplitude of hover animation
+ * @property {number} hoverFrequency - Frequency of hover animation
+ * @property {number} fadeOutDuration - Duration of fade out animation
+ * @property {number} offsetY - Vertical offset from reference position
  */
 
 /** @typedef {Object} GameConfig
@@ -176,15 +258,17 @@ import { applyDataAttributes } from '../utils/dataAttributeParser.js';
  * @property {PowerUpConfig} powerUps - Power-up settings
  * @property {FoodConfig} food - Food configuration
  * @property {ScoringConfig} scoring - Scoring configuration
+ * @property {PowerupBadgeConfig} powerupBadges - Power-up badge settings
+ */
+
+/** @typedef {Object} PartialGameConfig
+ * @property {PartialBoardConfig} [board]
+ * @property {PartialDifficultyConfig} [difficulty]
  */
 
 // Type definitions for partial configurations
 /** @typedef {Partial<BoardConfig>} PartialBoardConfig */
 /** @typedef {Partial<DifficultyConfig>} PartialDifficultyConfig */
-/** @typedef {Object} PartialGameConfig
- * @property {PartialBoardConfig} [board]
- * @property {PartialDifficultyConfig} [difficulty]
- */
 
 /**
  * @typedef {Object} GameData
@@ -227,7 +311,8 @@ export const defaultConfig = {
             spawn: {
                 speed: '1',
                 ghost: '2',
-                points: '3'
+                points: '3',
+                slow: '4',
             },
             snake: {
                 grow: 's'
@@ -288,10 +373,45 @@ export const defaultConfig = {
         baseSpeed: 8,
         speedProgression: {
             enabled: true,
-            increasePerFood: 0.2,
+            increasePerFood: 0.5,
             maxSpeed: 15,
             initialSpeedBoost: 1.5,
-            slowEffect: 0.5
+            slowEffect: 0.5  // Required by SpeedProgression type
+        },
+        segments: {
+            size: 0.85,
+            headSize: 1.2,  // Increased for wider head
+            headLength: 2,  // Set to 2 cells for elongated head
+            elevation: 2,  // Added elevation for 3D effect
+            cornerRadius: 4,  // Added corner radius for smoother look
+            eyeSize: 4,  // Increased from 0 for visible eyes
+            pupilSize: 0,
+            tongueLength: 0,
+            tongueWidth: 0,
+            tongueSpeed: 0,
+            tongueWagRange: 0
+        },
+        effects: {
+            speed: {
+                lineLength: 0.8,    // Relative to cell size
+                lineOpacity: 0.5,
+                lineWidth: 2
+            },
+            ghost: {
+                opacity: 0.7,
+                glowRadius: 15,
+                glowColor: 'cyan'
+            },
+            points: {
+                sparkleChance: 0.2,
+                sparkleSize: 0.2,   // Relative to cell size
+                sparkleOpacity: 0.8
+            },
+            slow: {
+                waveAmplitude: 0.2, // Relative to cell size
+                waveFrequency: 0.1,
+                waveSpeed: 0.005
+            }
         },
         colors: {
             head: '#4CAF50',
@@ -303,19 +423,6 @@ export const defaultConfig = {
             pupil: '#000000',
             tongue: '#FF0000'
         },
-        segments: {
-            size: 0.85,
-            headSize: 0.95,
-            headLength: 1,
-            elevation: 0,
-            cornerRadius: 0,
-            eyeSize: 0,
-            pupilSize: 0,
-            tongueLength: 0,
-            tongueWidth: 0,
-            tongueSpeed: 0,
-            tongueWagRange: 0
-        },
         controls: {
             up: ['ArrowUp', 'w'],
             down: ['ArrowDown', 's'],
@@ -326,35 +433,34 @@ export const defaultConfig = {
     powerUps: {
         types: ['speed', 'ghost', 'points', 'slow'],  
         spawnChance: 0.01,
-        duration: 10000,
         effects: {
             speed: {
                 speedMultiplier: 1.5,
                 ghostMode: false,
                 pointsMultiplier: 1.0,
                 slowMultiplier: 1.0,
-                duration: 5000
+                duration: 5000  // 5 seconds in milliseconds
             },
             ghost: {
                 speedMultiplier: 1.0,
                 ghostMode: true,
                 pointsMultiplier: 1.0,
                 slowMultiplier: 1.0,
-                duration: 8000
+                duration: 8000  // 8 seconds in milliseconds
             },
             points: {
                 speedMultiplier: 1.0,
                 ghostMode: false,
                 pointsMultiplier: 2.0,
                 slowMultiplier: 1.0,
-                duration: 10000
+                duration: 10000  // 10 seconds in milliseconds
             },
             slow: {
                 speedMultiplier: 1.0,
                 ghostMode: false,
                 pointsMultiplier: 1.0,
                 slowMultiplier: 0.5,
-                duration: 5000
+                duration: 5000  // 5 seconds in milliseconds
             }
         },
         colors: {
@@ -362,24 +468,76 @@ export const defaultConfig = {
             ghost: '#00ffff',
             points: '#ffff00',
             slow: '#FF5722'
+        },
+        visual: {
+            baseSize: 1.6,      // Size relative to cell size (increased from 0.8)
+            floatSpeed: 0.05,   // Speed of floating animation
+            floatAmount: 5,     // Pixels to float up/down
+            rotateSpeed: 0.02,  // Speed of crystal rotation
+            glowAmount: 20,     // Pixel blur for glow effect
+            shimmerCount: 3,    // Number of shimmer particles
+            shimmerSpeed: 0.1,  // Speed of shimmer rotation
+            shimmerSize: 4,     // Size of shimmer particles
+            energyCount: 8,     // Number of energy field particles
+            energySpeed: 0.05,  // Speed of energy field rotation
+            iconSize: 0.8       // Icon size relative to cell size (increased from 0.4)
         }
     },
     food: {
-        types: ['regular', 'bonus', 'golden'],  
+        types: ['regular', 'bonus', 'golden'],
         spawnRates: {
-            regular: 0.6,
-            bonus: 0.3,
-            golden: 0.1
+            regular: 0.8,
+            bonus: 0.15,
+            golden: 0.05
         },
         points: {
             regular: 10,
-            bonus: 20,
+            bonus: 30,
             golden: 50
         },
         colors: {
-            regular: '#E91E63',
-            bonus: '#9C27B0',
-            golden: '#FFD700'
+            regular: {
+                primary: '#FF2222',    // Brighter red
+                secondary: '#44FF44',   // Brighter green
+                highlight: '#FFFFFF'    // White highlight
+            },
+            bonus: {
+                primary: '#FF22FF',    // Brighter magenta
+                secondary: '#44FF44',   // Brighter green
+                highlight: '#FFFFFF'    // White highlight
+            },
+            golden: {
+                primary: '#FFD700',    // Pure gold
+                secondary: '#FFFF44',   // Bright yellow
+                highlight: '#FFFFFF'    // White highlight
+            }
+        },
+        effects: {
+            bounceSpeed: {
+                regular: 1000,  // ms per bounce cycle
+                bonus: 1200,
+                golden: 800
+            },
+            sparkleSpeed: {
+                regular: 0,     // no sparkle
+                bonus: 800,     // ms per sparkle cycle
+                golden: 500
+            },
+            pixelSize: {
+                regular: 0.125,     // fraction of cell size
+                bonus: 0.125,
+                golden: 0.125
+            },
+            outlineWeight: {
+                regular: 2,     // pixels
+                bonus: 3,
+                golden: 4
+            },
+            glow: {
+                regular: 10,    // glow radius in pixels
+                bonus: 15,
+                golden: 20
+            }
         }
     },
     scoring: {
@@ -395,7 +553,19 @@ export const defaultConfig = {
             { type: 'noWalls', bonus: 50 },
             { type: 'perfectRun', bonus: 25 }
         ]
-    }
+    },
+    powerupBadges: {
+        duration: 2000,
+        popInDuration: 300,
+        popInScale: 1.2,
+        spacing: 0.2,        // Spacing as percentage of cell size
+        size: 1.5,          // Size as multiplier of cell size
+        floatingSize: 2.0,  // Floating badge size as multiplier of cell size
+        hoverAmplitude: 2,
+        hoverFrequency: 3,
+        fadeOutDuration: 500,
+        offsetY: -50
+    },
 };
 
 // Initialize the game object with proper typing

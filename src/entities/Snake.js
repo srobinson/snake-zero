@@ -66,8 +66,6 @@ export class Snake {
         /** @type {number} */
         this.lastMoveTime = 0;
         /** @type {number} */
-        this.tongueWagTime = 0;
-        /** @type {number} */
         this.score = 0;
         /** @type {boolean} */
         this.growing = false;
@@ -102,7 +100,7 @@ export class Snake {
         
         // Add body segments
         let currentX = centerX - 2; // Start after head segments
-        for (let i = 0; i < snakeConfig.initialLength; i++) {
+        for (let i = 0; i < snakeConfig.initialLength - 1; i++) {  // -1 because head is now 2 cells
             this.segments.push({ x: currentX - i, y: centerY });
         }
 
@@ -110,7 +108,6 @@ export class Snake {
         this.direction = snakeConfig.initialDirection || 'right';
         this.nextDirection = this.direction;
         this.lastMoveTime = 0;
-        this.tongueWagTime = 0;
         this.score = 0;
         this.growing = false;
         this.foodEaten = 0;
@@ -129,11 +126,6 @@ export class Snake {
      * @returns {boolean} Whether the snake moved this update
      */
     update(currentTime) {
-        // Update tongue animation
-        const config = this.config.snake;
-        const tongueWagTime = currentTime % config.segments.tongueSpeed;
-        this.tongueWagTime = (tongueWagTime / config.segments.tongueSpeed) * Math.PI * 2;
-
         // Update effects first
         this.updateEffects();
 
@@ -234,21 +226,35 @@ export class Snake {
 
         // Check wall collision if not ghost
         if (!this.hasEffect('ghost')) {
-            // Check wall collision
-            if (head.x < 0 || head.x >= size.width || head.y < 0 || head.y >= size.height) {
+            // Check wall collision for both head segments
+            const frontHead = this.segments[0];
+            const backHead = this.segments[1];
+            
+            if (frontHead.x < 0 || frontHead.x >= size.width || frontHead.y < 0 || frontHead.y >= size.height ||
+                backHead.x < 0 || backHead.x >= size.width || backHead.y < 0 || backHead.y >= size.height) {
                 return true;
             }
 
-            // Check self collision
-            return this.segments.slice(1).some(segment => 
-                segment.x === head.x && segment.y === head.y
+            // Check self collision (start from segment 2 since 0,1 are head)
+            return this.segments.slice(2).some(segment => 
+                (segment.x === frontHead.x && segment.y === frontHead.y) ||
+                (segment.x === backHead.x && segment.y === backHead.y)
             );
         } else {
-            // In ghost mode, only wrap around the edges
-            if (head.x < 0) head.x = size.width - 1;
-            if (head.x >= size.width) head.x = 0;
-            if (head.y < 0) head.y = size.height - 1;
-            if (head.y >= size.height) head.y = 0;
+            // In ghost mode, wrap both head segments around the edges
+            const frontHead = this.segments[0];
+            const backHead = this.segments[1];
+            
+            if (frontHead.x < 0) frontHead.x = size.width - 1;
+            if (frontHead.x >= size.width) frontHead.x = 0;
+            if (frontHead.y < 0) frontHead.y = size.height - 1;
+            if (frontHead.y >= size.height) frontHead.y = 0;
+            
+            if (backHead.x < 0) backHead.x = size.width - 1;
+            if (backHead.x >= size.width) backHead.x = 0;
+            if (backHead.y < 0) backHead.y = size.height - 1;
+            if (backHead.y >= size.height) backHead.y = 0;
+            
             return false; // No collisions in ghost mode
         }
     }
@@ -284,8 +290,9 @@ export class Snake {
         // Update each effect type
         for (const [type, stacks] of this.effects.entries()) {
             // Remove expired effects
-            while (stacks.length > 0 && 
-                   now > stacks[0].startTime + stacks[0].duration) {
+            while (stacks.length > 0) {
+                const effect = stacks[0];
+                if (now <= effect.startTime + effect.duration) break;
                 stacks.shift();
             }
             
@@ -299,27 +306,36 @@ export class Snake {
     /**
      * Adds a power-up effect to the snake
      * @param {import('../config/gameConfig.js').PowerUpType} type - The type of effect to add
-     * @param {number} [duration] - Duration of the effect in milliseconds. If not provided, uses config default.
      */
-    addEffect(type, duration) {
+    addEffect(type) {
         const now = Date.now();
-        const config = this.config.snake.speedProgression;
+        const effectConfig = this.config.powerUps.effects[type];
         
-        let effect = {
+        // Ensure we have a valid duration from the config
+        if (!effectConfig || typeof effectConfig.duration !== 'number') {
+            console.error(`Invalid effect config for type: ${type}`);
+            return;
+        }
+
+        const effect = {
             type,
             startTime: now,
-            duration: duration !== undefined ? duration : this.config.powerUps.duration
+            duration: effectConfig.duration,
+            active: true
         };
         
         // Add effect-specific properties
         switch(type) {
             case 'speed':
-                effect.boost = config.initialSpeedBoost;
+                effect.boost = effectConfig.speedMultiplier || this.config.snake.speedProgression.initialSpeedBoost;
                 break;
             case 'ghost':
                 break;
             case 'points':
-                effect.multiplier = 2;
+                effect.multiplier = effectConfig.pointsMultiplier || 2;
+                break;
+            case 'slow':
+                effect.multiplier = effectConfig.slowMultiplier || 0.5;
                 break;
         }
         
@@ -380,15 +396,12 @@ export class Snake {
      * @returns {number} Remaining time in milliseconds, 0 if effect not active
      */
     getEffectTimeRemaining(type) {
-        this.updateEffects();
-        
         const stacks = this.effects.get(type);
         if (!stacks || stacks.length === 0) return 0;
         
         const now = Date.now();
-        return Math.max(0, ...stacks.map(effect => 
-            effect.startTime + effect.duration - now
-        ));
+        const effect = stacks[stacks.length - 1]; // Get most recent effect
+        return Math.max(0, (effect.startTime + effect.duration) - now);
     }
 
     /**
@@ -407,283 +420,333 @@ export class Snake {
     draw(p5, time) {
         const config = this.config.snake;
         const cellSize = this.grid.getCellSize();
-        
-        // Calculate tongue wag
-        const tongueWagAmount = Math.sin(this.tongueWagTime) * config.segments.tongueWagRange;
 
-        // Draw snake segments
         if (!this.segments || this.segments.length === 0) {
             console.error('No segments to draw');
             return;
         }
 
-        this.segments.forEach((segment, index) => {
+        // Start drawing with powerup effects
+        p5.push();
+        this.applyGhostEffect(p5);
+
+        // Draw body segments first (from tail to neck)
+        for (let i = this.segments.length - 1; i >= 2; i--) {
+            const segment = this.segments[i];
             if (!segment || typeof segment.x === 'undefined' || typeof segment.y === 'undefined') {
-                console.error('Invalid segment:', segment, 'at index:', index);
-                return;
+                console.error('Invalid segment:', segment, 'at index:', i);
+                continue;
             }
 
-            const pos = this.grid.getCellCenter(segment);
+            let pos = this.grid.getCellCenter(segment);
             if (!pos || typeof pos.x === 'undefined' || typeof pos.y === 'undefined') {
                 console.error('Invalid position:', pos, 'for segment:', segment);
-                return;
+                continue;
             }
 
-            const isHead = index < config.segments.headLength;
-            const isHeadFront = index === 0;
-            const isHeadBack = index === 1;
-            
-            // Special handling for head segments
-            if (isHead) {
-                if (isHeadFront) {
-                    const headWidth = cellSize * config.segments.headSize;
-                    const headLength = cellSize * config.segments.headSize * 2;
-                    let x = pos.x, y = pos.y;
-                    
-                    // Adjust position based on direction
-                    switch(this.direction) {
-                        case 'left':
-                            x += cellSize/2;
-                            break;
-                        case 'right':
-                            x -= cellSize/2;
-                            break;
-                        case 'up':
-                            y += cellSize/2;
-                            break;
-                        case 'down':
-                            y -= cellSize/2;
-                            break;
-                    }
-                    
-                    // Draw head shadow
-                    p5.fill(config.colors.shadow);
-                    p5.noStroke();
-                    
-                    // Draw elongated head shadow
-                    switch(this.direction) {
-                        case 'left':
-                        case 'right':
-                            p5.rect(
-                                x - headLength/2 + config.segments.elevation,
-                                y - headWidth/2 + config.segments.elevation,
-                                headLength,
-                                headWidth,
-                                config.segments.cornerRadius
-                            );
-                            break;
-                        case 'up':
-                        case 'down':
-                            p5.rect(
-                                x - headWidth/2 + config.segments.elevation,
-                                y - headLength/2 + config.segments.elevation,
-                                headWidth,
-                                headLength,
-                                config.segments.cornerRadius
-                            );
-                            break;
-                    }
-                    
-                    // Draw main head shape
-                    p5.fill(config.colors.head);
-                    switch(this.direction) {
-                        case 'left':
-                        case 'right':
-                            p5.rect(
-                                x - headLength/2,
-                                y - headWidth/2,
-                                headLength,
-                                headWidth,
-                                config.segments.cornerRadius
-                            );
-                            break;
-                        case 'up':
-                        case 'down':
-                            p5.rect(
-                                x - headWidth/2,
-                                y - headLength/2,
-                                headWidth,
-                                headLength,
-                                config.segments.cornerRadius
-                            );
-                            break;
-                    }
-                    
-                    // Draw head highlights
-                    p5.fill(config.colors.highlight);
-                    switch(this.direction) {
-                        case 'left':
-                        case 'right':
-                            // Top edge highlight
-                            p5.rect(
-                                x - headLength/2,
-                                y - headWidth/2,
-                                headLength,
-                                2,
-                                config.segments.cornerRadius
-                            );
-                            break;
-                        case 'up':
-                        case 'down':
-                            // Left edge highlight
-                            p5.rect(
-                                x - headWidth/2,
-                                y - headLength/2,
-                                2,
-                                headLength,
-                                config.segments.cornerRadius
-                            );
-                            break;
-                    }
+            pos = this.drawSegmentEffects(p5, pos, i, time, cellSize);
+            this.drawBodySegment(p5, pos, cellSize);
+        }
 
-                    // Draw eyes
-                    const eyeOffsetX = headWidth * 0.15;
-                    const eyeOffsetY = headWidth * 0.15;
-                    let leftEye, rightEye;
-                    
-                    switch(this.direction) {
-                        case 'up':
-                            leftEye = {x: x - eyeOffsetX, y: y - headLength/4};
-                            rightEye = {x: x + eyeOffsetX, y: y - headLength/4};
-                            break;
-                        case 'down':
-                            leftEye = {x: x + eyeOffsetX, y: y + headLength/4};
-                            rightEye = {x: x - eyeOffsetX, y: y + headLength/4};
-                            break;
-                        case 'left':
-                            leftEye = {x: x - headLength/4, y: y - eyeOffsetY};
-                            rightEye = {x: x - headLength/4, y: y + eyeOffsetY};
-                            break;
-                        case 'right':
-                            leftEye = {x: x + headLength/4, y: y - eyeOffsetY};
-                            rightEye = {x: x + headLength/4, y: y + eyeOffsetY};
-                            break;
-                    }
-                    
-                    // Draw eye whites
-                    p5.fill(config.colors.eyes);
-                    p5.circle(leftEye.x, leftEye.y, config.segments.eyeSize * 2);
-                    p5.circle(rightEye.x, rightEye.y, config.segments.eyeSize * 2);
-                    
-                    // Draw pupils
-                    p5.fill(config.colors.pupil);
-                    p5.circle(leftEye.x, leftEye.y, config.segments.pupilSize * 2);
-                    p5.circle(rightEye.x, rightEye.y, config.segments.pupilSize * 2);
-                    
-                    // Draw tongue
-                    const isMoving = time - this.lastMoveTime < this.getMoveDelay() * 0.5;
-                    const tongueWag = isMoving ? tongueWagAmount : 0;
-                    
-                    let tongueStart, tongueControl1, tongueControl2, tongueEnd;
-                    
-                    switch(this.direction) {
-                        case 'up':
-                            tongueStart = {x: x, y: y - headLength/2};
-                            tongueControl1 = {x: x + tongueWag/2, y: tongueStart.y - config.segments.tongueLength * 0.4};
-                            tongueControl2 = {x: x + tongueWag, y: tongueStart.y - config.segments.tongueLength * 0.7};
-                            tongueEnd = {x: x + tongueWag, y: tongueStart.y - config.segments.tongueLength};
-                            break;
-                        case 'down':
-                            tongueStart = {x: x, y: y + headLength/2};
-                            tongueControl1 = {x: x + tongueWag/2, y: tongueStart.y + config.segments.tongueLength * 0.4};
-                            tongueControl2 = {x: x + tongueWag, y: tongueStart.y + config.segments.tongueLength * 0.7};
-                            tongueEnd = {x: x + tongueWag, y: tongueStart.y + config.segments.tongueLength};
-                            break;
-                        case 'left':
-                            tongueStart = {x: x - headLength/2, y: y};
-                            tongueControl1 = {x: tongueStart.x - config.segments.tongueLength * 0.4, y: y + tongueWag/2};
-                            tongueControl2 = {x: tongueStart.x - config.segments.tongueLength * 0.7, y: y + tongueWag};
-                            tongueEnd = {x: tongueStart.x - config.segments.tongueLength, y: y + tongueWag};
-                            break;
-                        case 'right':
-                            tongueStart = {x: x + headLength/2, y: y};
-                            tongueControl1 = {x: tongueStart.x + config.segments.tongueLength * 0.4, y: y + tongueWag/2};
-                            tongueControl2 = {x: tongueStart.x + config.segments.tongueLength * 0.7, y: y + tongueWag};
-                            tongueEnd = {x: tongueStart.x + config.segments.tongueLength, y: y + tongueWag};
-                            break;
-                    }
-                    
-                    // Draw curved tongue
-                    p5.stroke(config.colors.tongue);
-                    p5.strokeWeight(config.segments.tongueWidth);
-                    p5.noFill();
-                    
-                    // Main tongue curve
-                    p5.beginShape();
-                    p5.vertex(tongueStart.x, tongueStart.y);
-                    p5.bezierVertex(
-                        tongueControl1.x, tongueControl1.y,
-                        tongueControl2.x, tongueControl2.y,
-                        tongueEnd.x, tongueEnd.y
-                    );
-                    p5.endShape();
-                    
-                    // Fork ends
-                    const forkLength = config.segments.tongueLength * 0.3;
-                    const forkAngle = Math.PI / 6; // 30 degrees
-                    
-                    const dx = tongueEnd.x - tongueControl2.x;
-                    const dy = tongueEnd.y - tongueControl2.y;
-                    const angle = Math.atan2(dy, dx);
-                    
-                    const fork1End = {
-                        x: tongueEnd.x + Math.cos(angle + forkAngle) * forkLength,
-                        y: tongueEnd.y + Math.sin(angle + forkAngle) * forkLength
-                    };
-                    
-                    const fork2End = {
-                        x: tongueEnd.x + Math.cos(angle - forkAngle) * forkLength,
-                        y: tongueEnd.y + Math.sin(angle - forkAngle) * forkLength
-                    };
-                    
-                    p5.line(tongueEnd.x, tongueEnd.y, fork1End.x, fork1End.y);
-                    p5.line(tongueEnd.x, tongueEnd.y, fork2End.x, fork2End.y);
-                    
-                    p5.noStroke();
-                }
-            } else {
-                // Draw body segments as before
-                const segmentSize = cellSize * config.segments.size;
-                
-                // Draw shadow
-                p5.fill(config.colors.shadow);
-                p5.noStroke();
+        // Draw head (2 segments)
+        if (this.segments.length >= 2) {
+            // Draw back of head (second segment)
+            const backHead = this.segments[1];
+            let backPos = this.grid.getCellCenter(backHead);
+            this.drawBodySegment(p5, backPos, cellSize);
+
+            // Draw front of head (first segment)
+            const frontHead = this.segments[0];
+            let frontPos = this.grid.getCellCenter(frontHead);
+            this.drawHead(p5, frontPos, cellSize);
+        }
+        
+        // Reset powerup effects
+        this.resetEffects(p5);
+        p5.pop();
+    }
+
+    /**
+     * Draws a body segment
+     * @param {import('p5')} p5 - The p5.js instance
+     * @param {{x: number, y: number}} pos - Segment position
+     * @param {number} cellSize - Size of a grid cell
+     * @private
+     */
+    drawBodySegment(p5, pos, cellSize) {
+        const config = this.config.snake;
+        const segmentSize = cellSize * config.segments.size;
+        
+        // Draw shadow
+        p5.fill(config.colors.shadow);
+        p5.noStroke();
+        p5.rect(
+            pos.x - segmentSize/2 + config.segments.elevation,
+            pos.y - segmentSize/2 + config.segments.elevation,
+            segmentSize,
+            segmentSize,
+            config.segments.cornerRadius
+        );
+        
+        // Draw main segment
+        p5.fill(config.colors.body);
+        p5.rect(
+            pos.x - segmentSize/2,
+            pos.y - segmentSize/2,
+            segmentSize,
+            segmentSize,
+            config.segments.cornerRadius
+        );
+    }
+
+    /**
+     * Draws the snake's head
+     * @param {import('p5')} p5 - The p5.js instance
+     * @param {{x: number, y: number}} pos - Head position
+     * @param {number} cellSize - Size of a grid cell
+     * @private
+     */
+    drawHead(p5, pos, cellSize) {
+        const config = this.config.snake;
+        const headWidth = cellSize * config.segments.headSize;
+        const headLength = cellSize * 2; // Make head 2 cells long
+        const x = pos.x;
+        const y = pos.y;
+        
+        // Draw head shadow
+        p5.fill(config.colors.shadow);
+        p5.noStroke();
+        
+        switch(this.direction) {
+            case 'left':
                 p5.rect(
-                    pos.x - segmentSize/2 + config.segments.elevation,
-                    pos.y - segmentSize/2 + config.segments.elevation,
-                    segmentSize,
-                    segmentSize,
+                    x - headLength/2 + config.segments.elevation,
+                    y - headWidth/2 + config.segments.elevation,
+                    headLength,
+                    headWidth,
                     config.segments.cornerRadius
                 );
-                
-                // Draw main segment
-                p5.fill(config.colors.body);
+                break;
+            case 'right':
                 p5.rect(
-                    pos.x - segmentSize/2,
-                    pos.y - segmentSize/2,
-                    segmentSize,
-                    segmentSize,
+                    x - headLength/2 + config.segments.elevation,
+                    y - headWidth/2 + config.segments.elevation,
+                    headLength,
+                    headWidth,
                     config.segments.cornerRadius
                 );
-                
-                // Draw highlights
-                p5.fill(config.colors.highlight);
+                break;
+            case 'up':
                 p5.rect(
-                    pos.x - segmentSize/2,
-                    pos.y - segmentSize/2,
-                    segmentSize,
-                    2,
+                    x - headWidth/2 + config.segments.elevation,
+                    y - headLength/2 + config.segments.elevation,
+                    headWidth,
+                    headLength,
                     config.segments.cornerRadius
                 );
+                break;
+            case 'down':
                 p5.rect(
-                    pos.x - segmentSize/2,
-                    pos.y - segmentSize/2,
-                    2,
-                    segmentSize,
+                    x - headWidth/2 + config.segments.elevation,
+                    y - headLength/2 + config.segments.elevation,
+                    headWidth,
+                    headLength,
                     config.segments.cornerRadius
                 );
-            }
-        });
+                break;
+        }
+        
+        // Draw main head shape
+        p5.fill(config.colors.head);
+        switch(this.direction) {
+            case 'left':
+                p5.rect(
+                    x - headLength/2,
+                    y - headWidth/2,
+                    headLength,
+                    headWidth,
+                    config.segments.cornerRadius
+                );
+                break;
+            case 'right':
+                p5.rect(
+                    x - headLength/2,
+                    y - headWidth/2,
+                    headLength,
+                    headWidth,
+                    config.segments.cornerRadius
+                );
+                break;
+            case 'up':
+                p5.rect(
+                    x - headWidth/2,
+                    y - headLength/2,
+                    headWidth,
+                    headLength,
+                    config.segments.cornerRadius
+                );
+                break;
+            case 'down':
+                p5.rect(
+                    x - headWidth/2,
+                    y - headLength/2,
+                    headWidth,
+                    headLength,
+                    config.segments.cornerRadius
+                );
+                break;
+        }
+        
+        this.drawEyes(p5, x, y, headWidth, headLength);
+    }
+
+    /**
+     * Draws the snake's eyes
+     * @param {import('p5')} p5 - The p5.js instance
+     * @param {number} x - X coordinate of the eye center
+     * @param {number} y - Y coordinate of the eye center
+     * @param {number} headWidth - Width of the snake's head
+     * @param {number} headLength - Length of the snake's head
+     * @private
+     */
+    drawEyes(p5, x, y, headWidth, headLength) {
+        const config = this.config.snake;
+        const eyeSize = config.segments.eyeSize;
+        const pupilSize = config.segments.pupilSize;
+        const eyeOffsetX = headWidth * 0.15;
+        const eyeOffsetY = headWidth * 0.15;
+        let leftEye, rightEye;
+        
+        switch(this.direction) {
+            case 'left':
+                leftEye = { x: x - headLength/4, y: y - eyeOffsetY };
+                rightEye = { x: x - headLength/4, y: y + eyeOffsetY };
+                break;
+            case 'right':
+                leftEye = { x: x + headLength/4, y: y - eyeOffsetY };
+                rightEye = { x: x + headLength/4, y: y + eyeOffsetY };
+                break;
+            case 'up':
+                leftEye = { x: x - eyeOffsetX, y: y - headLength/4 };
+                rightEye = { x: x + eyeOffsetX, y: y - headLength/4 };
+                break;
+            case 'down':
+                leftEye = { x: x - eyeOffsetX, y: y + headLength/4 };
+                rightEye = { x: x + eyeOffsetX, y: y + headLength/4 };
+                break;
+        }
+        
+        // Draw eye whites
+        p5.fill(config.colors.eyes);
+        p5.noStroke();
+        p5.circle(leftEye.x, leftEye.y, eyeSize);
+        p5.circle(rightEye.x, rightEye.y, eyeSize);
+        
+        // Draw pupils
+        if (pupilSize > 0) {
+            p5.fill(config.colors.pupil);
+            p5.circle(leftEye.x, leftEye.y, pupilSize);
+            p5.circle(rightEye.x, rightEye.y, pupilSize);
+        }
+    }
+
+    /**
+     * Draws powerup effects for a body segment
+     * @param {import('p5')} p5 - The p5.js instance
+     * @param {Position} pos - Segment position
+     * @param {number} index - Segment index
+     * @param {number} time - Current game time
+     * @param {number} cellSize - Size of a grid cell
+     * @private
+     */
+    drawSegmentEffects(p5, pos, index, time, cellSize) {
+        const config = this.config.snake;
+        const hasSpeed = this.hasEffect('speed');
+        const hasPoints = this.hasEffect('points');
+        const hasSlow = this.hasEffect('slow');
+
+        // Speed effect: add speed lines
+        if (hasSpeed) {
+            const speedEffect = config.effects.speed;
+            const angle = this.direction === 'left' || this.direction === 'right' ? 0 : Math.PI/2;
+            const lineLength = cellSize * speedEffect.lineLength;
+            p5.push();
+            p5.translate(pos.x, pos.y);
+            p5.rotate(angle);
+            p5.stroke(255, 255, 255, speedEffect.lineOpacity * 255);
+            p5.strokeWeight(speedEffect.lineWidth);
+            p5.line(-lineLength/2, 0, lineLength/2, 0);
+            p5.pop();
+        }
+
+        // Points effect: add sparkles
+        if (hasPoints && Math.random() < config.effects.points.sparkleChance) {
+            const pointsEffect = config.effects.points;
+            const sparkSize = cellSize * pointsEffect.sparkleSize;
+            p5.push();
+            p5.translate(pos.x, pos.y);
+            p5.noStroke();
+            p5.fill(255, 255, 0, pointsEffect.sparkleOpacity * 255);
+            this.drawStar(p5, 0, 0, sparkSize * 0.4, sparkSize, 5);
+            p5.pop();
+        }
+
+        // Slow effect: add wavy motion
+        if (hasSlow) {
+            const slowEffect = config.effects.slow;
+            pos.x += Math.sin((time * slowEffect.waveSpeed) + (index * slowEffect.waveFrequency)) 
+                    * (cellSize * slowEffect.waveAmplitude);
+        }
+
+        return pos;
+    }
+
+    /**
+     * Helper function to draw a star shape
+     * @param {import('p5')} p5 - The p5.js instance
+     * @param {number} x - X coordinate of the star center
+     * @param {number} y - Y coordinate of the star center
+     * @param {number} radius1 - Inner radius of star points
+     * @param {number} radius2 - Outer radius of star points
+     * @param {number} npoints - Number of star points
+     */
+    drawStar(p5, x, y, radius1, radius2, npoints) {
+        let angle = Math.PI * 2 / npoints;
+        let halfAngle = angle / 2.0;
+        p5.beginShape();
+        for (let a = 0; a < Math.PI * 2; a += angle) {
+            let sx = x + Math.cos(a) * radius2;
+            let sy = y + Math.sin(a) * radius2;
+            p5.vertex(sx, sy);
+            sx = x + Math.cos(a + halfAngle) * radius1;
+            sy = y + Math.sin(a + halfAngle) * radius1;
+            p5.vertex(sx, sy);
+        }
+        p5.endShape(p5.CLOSE);
+    }
+
+    /**
+     * Applies ghost effect to the drawing context
+     * @param {import('p5')} p5 - The p5.js instance
+     * @private
+     */
+    applyGhostEffect(p5) {
+        if (this.hasEffect('ghost')) {
+            const ghostEffect = this.config.snake.effects.ghost;
+            p5.drawingContext.globalAlpha = ghostEffect.opacity;
+            p5.drawingContext.shadowBlur = ghostEffect.glowRadius;
+            p5.drawingContext.shadowColor = ghostEffect.glowColor;
+        }
+    }
+
+    /**
+     * Resets any applied effects to the drawing context
+     * @param {import('p5')} p5 - The p5.js instance
+     * @private
+     */
+    resetEffects(p5) {
+        p5.drawingContext.globalAlpha = 1;
+        p5.drawingContext.shadowBlur = 0;
     }
 
     /**

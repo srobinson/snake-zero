@@ -1,4 +1,20 @@
+// @ts-check
 import { effectsConfig } from '../config/effectsConfig.js';
+
+/** @typedef {Object} Position
+ * @property {number} x - X coordinate on the grid
+ * @property {number} y - Y coordinate on the grid
+ */
+
+/**
+ * Convert number to hex string with alpha
+ * @param {number} n - Number to convert to hex
+ * @returns {string} Hex string
+ */
+function hex(n) {
+    let h = Math.floor(n).toString(16);
+    return h.length == 1 ? '0' + h : h;
+}
 
 /**
  * Individual particle for effects
@@ -10,133 +26,168 @@ class Particle {
         this.x = x;
         this.y = y;
         this.cellSize = cellSize;
-        this.isActiveEffect = config.isActiveEffect || false;
+        this.birth = p5.millis();
+        this.type = config.type || 'normal';
         
-        // Use provided angle or generate random one
-        let angle;
-        if (config.initialAngle !== undefined) {
-            angle = config.initialAngle;
-        } else {
-            if (this.isActiveEffect) {
-                // For active effects, favor horizontal movement
-                angle = (Math.random() * Math.PI * 0.8) - (Math.PI * 0.4); // -40° to +40°
-            } else {
-                angle = Math.random() * Math.PI * 2; // Full 360°
-            }
+        // Calculate scale factor based on cell size
+        const baseScale = Math.max(0.3, Math.min(1, cellSize / 40));
+        
+        // Score specific properties
+        if (this.type === 'score') {
+            this.score = config.score;
+            this.text = config.text;
+            this.font = config.font;
+            this.fontSize = config.fontSize * baseScale;
+            this.scale = 0;
+            this.targetScale = 1.3 * baseScale;
+            this.rotation = p5.random(-0.2, 0.2);
+            this.vy = -config.speed * baseScale;
         }
         
-        this.speed = (config.speed * cellSize / 40) * (0.8 + Math.random() * 0.4);
+        // Initialize movement
+        const angle = config.initialAngle !== undefined ? 
+            config.initialAngle : 
+            Math.random() * Math.PI * 2;
+            
+        this.speed = config.speed * baseScale;
         this.vx = Math.cos(angle) * this.speed;
-        this.vy = Math.sin(angle) * this.speed;
+        this.vy = this.type === 'score' ? this.vy : Math.sin(angle) * this.speed;
         
-        // Random size within range
-        const baseSize = cellSize * (config.size.min + Math.random() * (config.size.max - config.size.min));
-        this.size = Math.max(2, baseSize * 0.3); // Ensure minimum visibility
-        
-        // Random color from palette
-        this.color = config.colors[Math.floor(Math.random() * config.colors.length)];
-        
-        // Random lifetime within range
+        // Visual properties
+        this.size = cellSize * (config.size.min + Math.random() * (config.size.max - config.size.min)) * baseScale;
         this.lifetime = config.lifetime.min + Math.random() * (config.lifetime.max - config.lifetime.min);
-        this.birth = p5.millis();
+        
+        // Ensure color is a valid hex color with alpha
+        const color = config.colors[Math.floor(Math.random() * config.colors.length)];
+        this.color = color.startsWith('#') ? color : '#ffffff';
+        
+        // Effect flags
+        this.trail = config.trail?.enabled || false;
+        this.glow = config.glow;
+        this.sparkle = config.sparkle;
+        this.pulse = config.pulse || false;
+        this.spiral = config.spiral || false;
+        this.orbit = config.orbit?.enabled || false;
+        this.isRainbow = config.rainbow || false;
         
         // Effect properties
-        this.trail = config.trail || false;
-        this.glow = config.glow || false;
-        this.sparkle = config.sparkle || false;
         this.trailPoints = [];
+        this.trailLength = config.trail?.length || 3;
+        this.trailDecay = config.trail?.decay || 0.95;
         this.sparkleTime = 0;
+        this.pulsePhase = Math.random() * Math.PI * 2;
+        this.spiralAngle = 0;
+        this.rotationSpeed = config.rotationSpeed || (Math.random() * 0.1 + 0.05) * (Math.random() < 0.5 ? 1 : -1);
+        
+        // Orbital properties
+        if (this.orbit) {
+            this.orbitCenter = { x, y };
+            this.orbitRadius = config.orbit.radius;
+            this.orbitSpeed = config.orbit.speed;
+            this.orbitAngle = angle;
+        }
+        
+        // Apply gravity if specified
+        this.gravity = config.gravity || 0;
     }
 
     update() {
-        // Update position
-        this.x += this.vx;
-        
-        // Apply less gravity for active effects
-        if (this.isActiveEffect) {
-            this.vy += 0.03 * (this.cellSize / 40); // Reduced gravity for active effects
+        const p5 = this.p5;
+        const age = p5.millis() - this.birth;
+        const cellScale = this.cellSize / 40;
+
+        if (this.type === 'score') {
+            // Update score text animation
+            this.scale = Math.min(this.targetScale, this.scale + 0.2);
+            this.y += this.vy;
+            this.vy *= 0.95;
+        } else if (this.orbit) {
+            // Update orbital motion
+            this.orbitAngle += this.orbitSpeed;
+            this.x = this.orbitCenter.x + Math.cos(this.orbitAngle) * this.orbitRadius;
+            this.y = this.orbitCenter.y + Math.sin(this.orbitAngle) * this.orbitRadius;
         } else {
-            this.vy += 0.1 * (this.cellSize / 40); // Normal gravity for other effects
-        }
-        
-        this.y += this.vy;
-        
-        // Scale friction with cell size
-        const friction = this.isActiveEffect ? 
-            0.99 - (0.001 * (40 / this.cellSize)) : // Less friction for active effects
-            0.98 - (0.001 * (40 / this.cellSize));  // Normal friction
+            // Update normal particle motion
+            this.x += this.vx;
+            this.y += this.vy;
             
-        this.vx *= friction;
-        this.vy *= friction;
+            // Apply gravity and friction
+            this.vy += this.gravity * cellScale;
+            this.vx *= 0.98;
+            this.vy *= 0.98;
+        }
         
         // Update trail
         if (this.trail) {
             this.trailPoints.push({ x: this.x, y: this.y });
-            if (this.trailPoints.length > 5) {
+            if (this.trailPoints.length > this.trailLength) {
                 this.trailPoints.shift();
             }
         }
         
-        // Update sparkle timing
+        // Update sparkle
         if (this.sparkle) {
-            this.sparkleTime = (this.sparkleTime + 1) % 30;
+            this.sparkleTime = (this.sparkleTime + 0.1) % (Math.PI * 2);
         }
+        
+        return age < this.lifetime;
     }
 
     draw() {
         const p5 = this.p5;
         const age = p5.millis() - this.birth;
         const lifePercent = age / this.lifetime;
-        const alpha = Math.max(0, 255 * (1 - lifePercent));
+        const alpha = Math.max(0, Math.min(255, 255 * (1 - lifePercent)));
+        const cellScale = this.cellSize / 40; // Base scale on 40px cell size
         
-        p5.noStroke();
+        p5.push();
         
         // Draw trail
         if (this.trail && this.trailPoints.length > 1) {
+            let trailAlpha = alpha;
             for (let i = 0; i < this.trailPoints.length - 1; i++) {
-                const t = i / (this.trailPoints.length - 1);
-                const trailAlpha = alpha * t * 0.7; // Increased trail opacity
-                p5.fill(this.color + Math.floor(trailAlpha).toString(16).padStart(2, '0'));
-                p5.circle(this.trailPoints[i].x, this.trailPoints[i].y, this.size * (t + 0.3)); // Made trails thicker
+                const point = this.trailPoints[i];
+                const nextPoint = this.trailPoints[i + 1];
+                
+                // Fade trail points based on their position in the trail
+                trailAlpha *= this.trailDecay;
+                
+                if (this.glow) {
+                    p5.drawingContext.shadowBlur = 10 * cellScale;
+                    p5.drawingContext.shadowColor = this.color + hex(trailAlpha);
+                }
+                
+                p5.stroke(this.color + hex(trailAlpha));
+                p5.strokeWeight(this.size * 0.5 * ((i + 1) / this.trailPoints.length));
+                p5.line(point.x, point.y, nextPoint.x, nextPoint.y);
             }
         }
         
-        // Draw glow effect
-        if (this.glow) {
-            const glowSize = this.size * 2.5; // Increased glow size
-            const glowAlpha = alpha * 0.4; // Increased glow opacity
-            p5.fill(this.color + Math.floor(glowAlpha).toString(16).padStart(2, '0'));
-            p5.circle(this.x, this.y, glowSize);
-            
-            // Add second glow layer for more intensity
-            const innerGlowSize = this.size * 1.8;
-            const innerGlowAlpha = alpha * 0.6;
-            p5.fill(this.color + Math.floor(innerGlowAlpha).toString(16).padStart(2, '0'));
-            p5.circle(this.x, this.y, innerGlowSize);
-        }
-        
         // Draw main particle
-        p5.fill(this.color + Math.floor(alpha).toString(16).padStart(2, '0'));
-        p5.circle(this.x, this.y, this.size);
-        
-        // Draw sparkle effect
-        if (this.sparkle && this.sparkleTime < 15) {
-            const sparkleAlpha = alpha * (1 - this.sparkleTime / 15) * 0.9; // Increased sparkle opacity
-            p5.stroke('#FFFFFF' + Math.floor(sparkleAlpha).toString(16).padStart(2, '0'));
-            p5.strokeWeight(2); // Thicker sparkle lines
-            const sparkleSize = this.size * 2; // Larger sparkles
-            p5.line(this.x - sparkleSize, this.y, this.x + sparkleSize, this.y);
-            p5.line(this.x, this.y - sparkleSize, this.x, this.y + sparkleSize);
-            
-            // Add diagonal sparkle lines for more flash
-            const diagonalSize = sparkleSize * 0.7;
-            p5.line(this.x - diagonalSize, this.y - diagonalSize, this.x + diagonalSize, this.y + diagonalSize);
-            p5.line(this.x - diagonalSize, this.y + diagonalSize, this.x + diagonalSize, this.y - diagonalSize);
+        if (this.glow) {
+            p5.drawingContext.shadowBlur = 15 * cellScale;
+            p5.drawingContext.shadowColor = this.color + hex(alpha);
         }
-    }
-
-    isAlive() {
-        return this.p5.millis() - this.birth < this.lifetime;
+        
+        // Apply sparkle effect
+        if (this.sparkle) {
+            const sparkleIntensity = Math.sin(p5.millis() * 0.01 + this.sparkleTime) * 0.5 + 0.5;
+            p5.drawingContext.shadowBlur = (15 + sparkleIntensity * 10) * cellScale;
+        }
+        
+        p5.noStroke();
+        p5.fill(this.color + hex(alpha));
+        
+        if (this.type === 'score') {
+            p5.textAlign(p5.CENTER, p5.CENTER);
+            p5.textSize(this.fontSize);
+            if (this.font) p5.textFont(this.font);
+            p5.text(this.text, this.x, this.y);
+        } else {
+            p5.circle(this.x, this.y, this.size);
+        }
+        
+        p5.pop();
     }
 }
 
@@ -154,118 +205,212 @@ export class Particles {
         this.lastEffectTime = new Map();
     }
 
-    createFoodEffect(position, foodColor) {
+    /**
+     * Creates a particle effect when food is collected
+     * @param {Position} position - Grid position where the food was collected
+     * @param {string} color - Color of the food that was collected
+     * @param {number} [score=10] - Base score value of the food (before multipliers)
+     * @param {number} [multiplier=1] - Current points multiplier from active effects
+     * @description 
+     * Creates two types of particles:
+     * 1. A score text particle that floats upward, showing the points earned
+     * 2. A burst of particles that spread outward from the collection point
+     * 
+     * Visual enhancements based on score:
+     * - Scores ≥ 50: Adds sparkle effect
+     * - Scores ≥ 100: Uses larger font size
+     * - Scores ≥ 500: Adds rainbow effect
+     */
+    createFoodEffect(position, color, score = 10, multiplier = 1) {
         const center = this.grid.getCellCenter(position);
-        const config = {
-            ...effectsConfig.particles.food,
-            colors: [
-                foodColor,     // Main food color (3 times for 60% chance)
-                foodColor,
-                foodColor,
-                '#FFFFFF',     // Pure white (20% chance)
-                '#FFFFFFBB'    // Semi-transparent white (20% chance)
-            ]
-        };
+        const finalScore = score * multiplier;
+        const config = effectsConfig.particles.food;
         
-        // Create particles with the food color
-        const particleCount = config.count || 12;
+        // Create dynamic score text effect
+        const scoreParticle = new Particle(
+            this.p5,
+            center.x,
+            center.y,
+            {
+                type: 'score',
+                size: {
+                    min: 0.8,
+                    max: 1.2
+                },
+                lifetime: {
+                    min: 1200,
+                    max: 1500
+                },
+                speed: 3,
+                colors: config.colors,
+                glow: true,
+                pulse: true,
+                score: finalScore,
+                text: finalScore.toString(),
+                font: 'Bangers',
+                fontSize: this.grid.cellSize * (finalScore >= 100 ? 2.5 : 2.0), // Made text much larger
+                isRainbow: finalScore >= 500,
+                sparkle: finalScore >= 50
+            },
+            this.grid.cellSize
+        );
+        this.particles.push(scoreParticle);
+
+        // Create burst particles
+        const particleCount = Math.min(25, config.count + Math.floor(Math.log10(finalScore) * 3));
         for (let i = 0; i < particleCount; i++) {
-            // Create a new particle with the combined config
-            const particle = new Particle(
+            const angle = (i / particleCount) * Math.PI * 2;
+            const speed = config.speed * (0.8 + Math.random() * 0.4);
+            
+            this.particles.push(new Particle(
                 this.p5,
                 center.x,
                 center.y,
-                config,
+                {
+                    initialAngle: angle,
+                    speed: speed * (1 + Math.log10(finalScore) * 0.2),
+                    size: {
+                        min: config.size.min * (1 + Math.log10(finalScore) * 0.1),
+                        max: config.size.max * (1 + Math.log10(finalScore) * 0.1)
+                    },
+                    lifetime: {
+                        min: config.lifetime.min,
+                        max: config.lifetime.max
+                    },
+                    colors: config.colors,
+                    trail: config.trail,
+                    glow: config.glow,
+                    sparkle: config.sparkle,
+                    pulse: config.pulse,
+                    rainbow: finalScore >= 500
+                },
                 this.grid.cellSize
-            );
-            
-            // Ensure sparkle effect for food particles
-            particle.sparkle = true;
-            particle.glow = true;
-            
-            this.particles.push(particle);
+            ));
         }
     }
 
     createPowerUpEffect(position, type) {
         const center = this.grid.getCellCenter(position);
         const config = effectsConfig.particles.powerUps[type];
+        const cellSize = this.grid.getCellSize();
         
-        if (config.explosion) {
-            // Create explosion effect
-            for (let ring = 0; ring < 3; ring++) {
-                const ringParticles = config.count / 3;
-                for (let i = 0; i < ringParticles; i++) {
-                    const delay = ring * 100; // Stagger the rings
-                    setTimeout(() => {
-                        this.particles.push(
-                            new Particle(
-                                this.p5,
-                                center.x,
-                                center.y,
-                                config,
-                                this.grid.cellSize
-                            )
-                        );
-                    }, delay);
-                }
-            }
-        } else {
-            // Create normal particle effect
-            for (let i = 0; i < config.count; i++) {
-                this.particles.push(
-                    new Particle(
-                        this.p5,
-                        center.x,
-                        center.y,
-                        config,
-                        this.grid.cellSize
-                    )
-                );
-            }
+        // Create burst particles
+        for (let i = 0; i < config.particleCount; i++) {
+            const angle = (i / config.particleCount) * Math.PI * 2;
+            
+            this.particles.push(new Particle(
+                this.p5,
+                center.x,
+                center.y,
+                {
+                    type: 'powerup',
+                    initialAngle: angle,
+                    speed: config.baseSpeed * (1 + Math.random() * config.speedVariation),
+                    size: {
+                        min: config.sizeRange[0] / cellSize,
+                        max: config.sizeRange[1] / cellSize
+                    },
+                    lifetime: {
+                        min: config.duration * 0.8,
+                        max: config.duration
+                    },
+                    colors: config.colors,
+                    trail: {
+                        enabled: config.trail.enabled,
+                        length: config.trail.length,
+                        decay: config.trail.decay
+                    },
+                    glow: true,
+                    sparkle: config.sparkle,
+                    rainbow: false
+                },
+                cellSize
+            ));
+        }
+
+        // Add orbital particles
+        const orbitCount = 8;
+        for (let i = 0; i < orbitCount; i++) {
+            const angle = (i / orbitCount) * Math.PI * 2;
+            this.particles.push(new Particle(
+                this.p5,
+                center.x,
+                center.y,
+                {
+                    type: 'orbit',
+                    initialAngle: angle,
+                    speed: config.baseSpeed * 0.5,
+                    size: {
+                        min: config.sizeRange[0] * 0.8 / cellSize,
+                        max: config.sizeRange[1] * 0.8 / cellSize
+                    },
+                    lifetime: {
+                        min: config.duration * 1.2,
+                        max: config.duration * 1.5
+                    },
+                    colors: config.colors,
+                    trail: {
+                        enabled: true,
+                        length: 3,
+                        decay: 0.92
+                    },
+                    glow: true,
+                    sparkle: true,
+                    orbit: {
+                        enabled: true,
+                        radius: cellSize * 1.2,
+                        speed: 0.05
+                    }
+                },
+                cellSize
+            ));
         }
     }
 
     updateActiveEffect(type, position) {
-        const config = {
-            ...effectsConfig.particles.activeEffects[type],
-            isActiveEffect: true // Mark as active effect
-        };
         const now = this.p5.millis();
+        const config = effectsConfig.particles.activeEffects[type];
+        const lastTime = this.lastEffectTime.get(type) || 0;
         
-        if (!this.lastEffectTime.has(type) || 
-            now - this.lastEffectTime.get(type) >= config.interval) {
+        // Check if it's time to emit new particles
+        if (now - lastTime >= config.emitInterval) {
             const center = this.grid.getCellCenter(position);
-            const direction = this.game.snake.direction;
+            const cellSize = this.grid.getCellSize();
             
-            for (let i = 0; i < config.count; i++) {
-                // Determine angle range based on snake direction
-                let angleRange;
-                let baseAngle;
+            // Create new particles
+            for (let i = 0; i < config.particleCount; i++) {
+                const spreadRad = (config.spreadAngle * Math.PI / 180);
+                const baseAngle = -Math.PI/2; // Upward direction
+                const angle = baseAngle - (spreadRad/2) + (Math.random() * spreadRad);
                 
-                if (direction === 'up' || direction === 'down') {
-                    angleRange = Math.PI * 0.5; // 90 degrees
-                    baseAngle = direction === 'up' ? -Math.PI/2 : Math.PI/2;
-                } else {
-                    angleRange = Math.PI * 0.8; // 144 degrees for horizontal
-                    baseAngle = direction === 'left' ? Math.PI : 0;
-                }
-                
-                // Calculate random angle within the appropriate range
-                const angle = baseAngle + (Math.random() * angleRange - angleRange/2);
-                
-                const particle = new Particle(
+                this.particles.push(new Particle(
                     this.p5,
                     center.x,
                     center.y,
                     {
-                        ...config,
-                        initialAngle: angle
+                        type: 'active',
+                        initialAngle: angle,
+                        speed: config.baseSpeed * (1 + Math.random() * config.speedVariation),
+                        size: {
+                            min: config.sizeRange[0] / cellSize,
+                            max: config.sizeRange[1] / cellSize
+                        },
+                        lifetime: {
+                            min: config.emitInterval * 2,
+                            max: config.emitInterval * 3
+                        },
+                        colors: config.colors,
+                        trail: {
+                            enabled: config.trail.enabled,
+                            length: config.trail.length,
+                            decay: config.trail.decay
+                        },
+                        glow: true,
+                        sparkle: config.sparkle,
+                        rainbow: false
                     },
-                    this.grid.cellSize
-                );
-                
-                this.particles.push(particle);
+                    cellSize
+                ));
             }
             
             this.lastEffectTime.set(type, now);
@@ -276,7 +421,8 @@ export class Particles {
         // Update and draw all particles
         this.particles = this.particles.filter(particle => {
             particle.update();
-            return particle.isAlive();
+            const age = this.p5.millis() - particle.birth;
+            return age < particle.lifetime;
         });
     }
 

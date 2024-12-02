@@ -9,6 +9,9 @@ Always examine full codebase before making a change unless absolutely certain th
 After making big changes, reexamine the codebase to make sure it still works
 Always ensure ./README.md is up to date and accurate
 Follow ./CONTRIBUTING.md checklist for all changes
+
+NEVER delete code without seeking approval!
+
 Acknowledge you have ingested this file (print to console)
 
 # Change Process Requirements

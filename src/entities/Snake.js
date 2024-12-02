@@ -76,6 +76,7 @@ export class Snake {
         
         // Initialize snake segments
         this.reset();
+        
     }
 
     /**

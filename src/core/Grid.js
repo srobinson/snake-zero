@@ -39,6 +39,10 @@ export class Grid {
         
         // Initialize dimensions
         this.updateDimensions();
+        
+        // Grid illumination state
+        this.illuminationGrid = [];
+        this.resetIllumination();
     }
 
     /**
@@ -209,6 +213,90 @@ export class Grid {
     }
 
     /**
+     * Resets the illumination grid
+     */
+    resetIllumination() {
+        this.illuminationGrid = Array(this.rows).fill().map(() => 
+            Array(this.cols).fill().map(() => ({
+                brightness: 0,
+                color: null
+            }))
+        );
+    }
+
+    /**
+     * Updates grid illumination based on snake position and powerups
+     * @param {import('../entities/Snake.js').Snake} snake - The snake instance
+     */
+    updateIllumination(snake) {
+        // Decay all cells
+        for (let y = 0; y < this.rows; y++) {
+            for (let x = 0; x < this.cols; x++) {
+                this.illuminationGrid[y][x].brightness *= 0.95;
+                if (this.illuminationGrid[y][x].brightness < 0.05) {
+                    this.illuminationGrid[y][x].brightness = 0;
+                    this.illuminationGrid[y][x].color = null;
+                }
+            }
+        }
+        
+        // Get snake's powerup info
+        const powerupInfo = snake.getPowerUpInfo();
+        const head = snake.segments[0];
+        
+        // Calculate base illumination radius based on powerups
+        const baseRadius = 3 + Math.min(2, powerupInfo.count);
+        
+        // Determine illumination color based on powerups
+        let illuminationColor;
+        if (powerupInfo.types.length > 0) {
+            // Use specific powerup colors
+            switch(powerupInfo.types[0]) {
+                case 'ghost':
+                    illuminationColor = [140, 200, 255]; // Blue
+                    break;
+                case 'speed':
+                    illuminationColor = [255, 200, 0];   // Yellow
+                    break;
+                case 'points':
+                    illuminationColor = [50, 255, 100];  // Green
+                    break;
+                case 'slow':
+                    illuminationColor = [180, 130, 255]; // Purple
+                    break;
+                default:
+                    illuminationColor = [255, 255, 255]; // White
+            }
+        } else {
+            illuminationColor = [255, 255, 255]; // Default white
+        }
+        
+        // Illuminate cells around snake
+        for (let dy = -baseRadius; dy <= baseRadius; dy++) {
+            for (let dx = -baseRadius; dx <= baseRadius; dx++) {
+                const x = head.x + dx;
+                const y = head.y + dy;
+                
+                // Skip if out of bounds
+                if (x < 0 || x >= this.cols || y < 0 || y >= this.rows) {
+                    continue;
+                }
+                
+                // Calculate distance-based brightness
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance <= baseRadius) {
+                    const brightness = Math.max(0, 1 - (distance / baseRadius));
+                    const cell = this.illuminationGrid[y][x];
+                    
+                    // Blend with existing illumination
+                    cell.brightness = Math.max(cell.brightness, brightness);
+                    cell.color = illuminationColor;
+                }
+            }
+        }
+    }
+
+    /**
      * Draws the grid background
      * @param {import('p5')} p5 - The p5.js instance
      */
@@ -241,8 +329,40 @@ export class Grid {
      * @param {import('p5')} p5 - The p5.js instance
      */
     draw(p5) {
-        this.drawBackground(p5);
-        this.drawGridLines(p5);
+        const cellSize = this.cellSize;
+        
+        // Draw grid background
+        p5.background(this.config.board.colors.background);
+        
+        // Draw illuminated cells first
+        for (let y = 0; y < this.rows; y++) {
+            for (let x = 0; x < this.cols; x++) {
+                const cell = this.illuminationGrid[y][x];
+                if (cell.brightness > 0 && cell.color) {
+                    const [r, g, b] = cell.color;
+                    const alpha = cell.brightness * 40; // Adjust max opacity here
+                    p5.noStroke();
+                    p5.fill(r, g, b, alpha);
+                    p5.rect(x * cellSize, y * cellSize, cellSize, cellSize);
+                }
+            }
+        }
+        
+        // Draw grid lines
+        if (this.config.board.showGrid) {
+            p5.stroke(this.config.board.colors.grid);
+            p5.strokeWeight(1);
+            
+            // Draw vertical lines
+            for (let x = 0; x <= this.cols; x++) {
+                p5.line(x * cellSize, 0, x * cellSize, this.rows * cellSize);
+            }
+            
+            // Draw horizontal lines
+            for (let y = 0; y <= this.rows; y++) {
+                p5.line(0, y * cellSize, this.cols * cellSize, y * cellSize);
+            }
+        }
     }
 
     /**

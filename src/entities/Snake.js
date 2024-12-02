@@ -405,6 +405,19 @@ export class Snake {
      * @param {number} time - Current game time in milliseconds
      */
     draw(p5, time) {
+        // Get powerup info for effects
+        const powerupInfo = this.getPowerUpInfo();
+        
+        // Create snake trail effect based on powerups
+        if (powerupInfo.count > 0) {
+            this.game.particles.createSnakeEffect(
+                this.segments[0],
+                p5.color(this.config.snake.colors.body),
+                powerupInfo.count,
+                powerupInfo.types
+            );
+        }
+
         const config = this.config.snake;
         const cellSize = this.grid.getCellSize();
         
@@ -736,5 +749,29 @@ export class Snake {
         p5.text(`${speed.toFixed(1)} cells/s`, 0, -5);
         
         p5.pop();
+    }
+
+    /**
+     * Gets the total count of active powerups
+     * @returns {number} Total number of active powerup stacks
+     */
+    getActivePowerUpCount() {
+        let total = 0;
+        for (const [, stacks] of this.effects.entries()) {
+            total += stacks.length;
+        }
+        return total;
+    }
+
+    /**
+     * Gets active powerup information
+     * @returns {{count: number, types: string[]}} Powerup info
+     */
+    getPowerUpInfo() {
+        const types = Array.from(this.effects.keys());
+        return {
+            count: this.getActivePowerUpCount(),
+            types
+        };
     }
 }

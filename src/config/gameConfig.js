@@ -333,28 +333,28 @@ export const defaultConfig = {
                 ghostMode: false,
                 pointsMultiplier: 1.0,
                 slowMultiplier: 1.0,
-                duration: 5000
+                duration: 50000
             },
             ghost: {
                 speedMultiplier: 1.0,
                 ghostMode: true,
                 pointsMultiplier: 1.0,
                 slowMultiplier: 1.0,
-                duration: 8000
+                duration: 80000
             },
             points: {
                 speedMultiplier: 1.0,
                 ghostMode: false,
                 pointsMultiplier: 2.0,
                 slowMultiplier: 1.0,
-                duration: 10000
+                duration: 50000
             },
             slow: {
                 speedMultiplier: 1.0,
                 ghostMode: false,
                 pointsMultiplier: 1.0,
                 slowMultiplier: 0.5,
-                duration: 5000
+                duration: 1000
             }
         },
         colors: {

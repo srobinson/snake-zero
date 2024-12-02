@@ -5,6 +5,15 @@ export class Grid {
         this.gridColor = config.board.gridColor;
         this.lastRandomPosition = null;
         
+        // Update fullscreen preset dimensions before initializing
+        if (this.config.board.preset === 'fullscreen') {
+            this.config.board.presets.fullscreen = {
+                ...this.config.board.presets.fullscreen,
+                width: window.innerWidth,
+                height: window.innerHeight
+            };
+        }
+        
         // Initialize dimensions
         this.updateDimensions();
     }
@@ -22,9 +31,18 @@ export class Grid {
     updateDimensions() {
         // Get board dimensions from preset if specified
         const boardConfig = this.config.board;
-        const { width, height, cellSize } = boardConfig.preset ? 
+        let { width, height, cellSize } = boardConfig.preset ? 
             boardConfig.presets[boardConfig.preset] : 
             boardConfig;
+
+        // Handle fullscreen mode
+        if (boardConfig.preset === 'fullscreen') {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            // Update the preset dimensions
+            boardConfig.presets.fullscreen.width = width;
+            boardConfig.presets.fullscreen.height = height;
+        }
 
         // Calculate maximum allowed cell size
         const maxCellSize = this.calculateMaxCellSize(width, height, cellSize);

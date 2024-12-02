@@ -5,42 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Snake Zero</title>
     <link rel="stylesheet" href="/src/styles/main.css">
-    <script>
-        // Initialize game config
-        window.setGameConfig = function(config) {
-            localStorage.setItem('gameConfig', JSON.stringify(config));
-        };
-        
-        // Set fullscreen with cell size 50
-        const config = {
-            board: {
-                preset: 'fullscreen',
-                presets: {
-                    fullscreen: {
-                        width: window.innerWidth,
-                        height: window.innerHeight,
-                        cellSize: 50
-                    }
-                }
-            }
-        };
-        window.setGameConfig(config);
-
-        // Update board size on window resize
-        window.addEventListener('resize', () => {
-            const config = JSON.parse(localStorage.getItem('gameConfig') || '{}');
-            if (config.board?.preset === 'fullscreen') {
-                config.board.presets.fullscreen.width = window.innerWidth;
-                config.board.presets.fullscreen.height = window.innerHeight;
-                window.setGameConfig(config);
-                // Reload to apply new size
-                window.location.reload();
-            }
-        });
-    </script>
 </head>
 <body>
-    <div id="game-container"></div>
+    <div id="snaked-again-container" 
+         data-snake-board-size="fullscreen"
+         data-snake-cell-size="100"
+         data-snake-difficulty="hard"></div>
+    </div>
     <script type="module" src="/src/main.js"></script>
 </body>
 </html>

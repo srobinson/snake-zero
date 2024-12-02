@@ -24,6 +24,7 @@ class Game {
         this.powerUp = null;
         
         this.setupEventListeners();
+        this.setupResizeHandler();
     }
 
     setupEventListeners() {
@@ -41,10 +42,25 @@ class Game {
         });
     }
 
+    setupResizeHandler() {
+        window.addEventListener('resize', () => {
+            // Only handle resize in fullscreen mode
+            if (this.config.board.preset === 'fullscreen') {
+                // Update grid dimensions
+                this.grid.updateDimensions();
+                
+                // Update canvas size
+                if (this.p5) {
+                    this.p5.resizeCanvas(this.grid.width, this.grid.height);
+                }
+            }
+        });
+    }
+
     setup(p5) {
         this.p5 = p5;
         const canvas = p5.createCanvas(this.grid.width, this.grid.height);
-        canvas.parent('game-container');
+        canvas.parent('snaked-again-container');
     }
 
     update() {
@@ -241,7 +257,7 @@ class Game {
         this.p5.resizeCanvas(preset.width, preset.height);
 
         // Center canvas in container
-        const container = document.getElementById('game-container');
+        const container = document.getElementById('snaked-again-container');
         container.style.width = preset.width + 'px';
         container.style.height = preset.height + 'px';
 
@@ -336,12 +352,7 @@ new p5((p) => {
             p.preventDefault();
         }
 
-        // Handle debug panel toggle
-        if (key === '`') {
-            game.debugPanel.toggle();
-            return;
-        }
-
+        // Let debug panel handle all input
         game.handleInput(key, isShiftPressed);
     };
 

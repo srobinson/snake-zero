@@ -15,7 +15,12 @@ export class DebugPanel {
     }
 
     handleInput(key, isShiftPressed = false) {
-        if (key === this.config.shortcutKey) {
+        // Support both single key and array of keys for shortcuts
+        const shortcuts = Array.isArray(this.config.shortcutKey) ? 
+            this.config.shortcutKey : 
+            [this.config.shortcutKey];
+            
+        if (shortcuts.includes(key)) {
             this.toggle();
             return true;
         }
@@ -136,7 +141,7 @@ export class DebugPanel {
         
         if (this.config.showFPS) height += lineHeight;
         if (this.config.showSnakeInfo) height += lineHeight * 4;
-        if (this.config.showGridInfo) height += lineHeight * 2;
+        if (this.config.showGridInfo) height += lineHeight * 3;
         if (this.config.showEffects) {
             height += lineHeight;
             const effects = Array.from(this.game.snake.effects.entries());
@@ -197,6 +202,8 @@ export class DebugPanel {
             p5.text(`Grid: ${size.width}x${size.height}`, x + this.config.padding, currentY);
             currentY += lineHeight;
             p5.text(`Cell Size: ${cellSize}px`, x + this.config.padding, currentY);
+            currentY += lineHeight;
+            p5.text(`Board Size: ${currentPreset}`, x + this.config.padding, currentY);
             currentY += lineHeight;
         }
 

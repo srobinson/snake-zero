@@ -1,4 +1,5 @@
-import { validateConfig, deepMerge } from '../utils/configValidator.js';
+import { validateConfig, deepMerge, validationRules } from '../utils/configValidator.js';
+import { applyDataAttributes } from '../utils/dataAttributeParser.js';
 
 export const defaultConfig = {
     debug: {
@@ -14,7 +15,7 @@ export const defaultConfig = {
         textColor: '#ffffff',
         fontSize: 14,
         padding: 10,
-        shortcutKey: 'd', // backtick key
+        shortcutKey: ['`', 'd'], // Toggle debug panel visibility
         controls: {
             spawn: {
                 speed: '1',
@@ -58,7 +59,7 @@ export const defaultConfig = {
         gridColor: '#111111'
     },
     difficulty: {
-        current: 'normal',  // easy, normal, hard
+        current: 'easy',  // easy, normal, hard
         presets: {
             easy: {
                 baseSpeed: 5,
@@ -77,6 +78,7 @@ export const defaultConfig = {
     snake: {
         initialLength: 3,  // Initial body segments (excluding head)
         initialDirection: 'right',
+        baseSpeed: 8,     // Base movement speed
         speedProgression: {
             enabled: true,
             increasePerFood: 0.2,    // Speed increase per food eaten
@@ -154,10 +156,85 @@ export const defaultConfig = {
 
 class ConfigManager {
     constructor() {
+        // Initialize configuration sources
+        this.sources = {
+            default: null,
+            localStorage: null,
+            dataAttributes: null
+        };
+        
+        // Load configurations in order of increasing priority
+        this.loadDefaultConfig();
+        this.loadFromLocalStorage();
+        this.loadFromDataAttributes();
+        
+        // Merge configurations according to priority
+        this.mergeConfigurations();
+    }
+
+    loadDefaultConfig() {
+        this.sources.default = { ...defaultConfig };
         this.config = { ...defaultConfig };
+    }
+
+    loadFromLocalStorage() {
+        try {
+            const saved = localStorage.getItem('snakeGameConfig');
+            if (!saved) return;
+
+            const savedConfig = JSON.parse(saved);
+            
+            // Validate saved configuration
+            const errors = validateConfig(savedConfig);
+            if (errors.length > 0) {
+                console.warn('Saved configuration validation errors:', errors);
+                return;
+            }
+
+            // Store valid localStorage config
+            this.sources.localStorage = savedConfig;
+        } catch (error) {
+            console.error('Failed to load configuration from localStorage:', error);
+        }
+    }
+
+    loadFromDataAttributes() {
+        const container = document.getElementById('snaked-again-container');
+        if (!container) return;
+
+        const dataConfig = applyDataAttributes(this.config, container);
+        if (!dataConfig) return;
+
+        // Store valid data attributes config
+        this.sources.dataAttributes = dataConfig;
+        
+        // Update grid dimensions immediately if game exists
+        if (window.game && window.game.grid) {
+            window.game.grid.updateDimensions();
+        }
+    }
+
+    mergeConfigurations() {
+        // Start with default configuration
+        this.config = { ...this.sources.default };
+
+        // Merge localStorage config (middle priority)
+        if (this.sources.localStorage) {
+            this.config = deepMerge(this.config, this.sources.localStorage);
+        }
+
+        // Merge data attributes config (highest priority)
+        if (this.sources.dataAttributes) {
+            this.config = deepMerge(this.config, this.sources.dataAttributes);
+        }
+
+        // Final validation of merged configuration
         const errors = validateConfig(this.config);
         if (errors.length > 0) {
-            console.error('Default configuration validation errors:', errors);
+            console.error('Final configuration validation errors:', errors);
+            // Fallback to default configuration
+            this.config = { ...this.sources.default };
+            console.warn('Falling back to default configuration');
         }
     }
 
@@ -166,26 +243,39 @@ class ConfigManager {
     }
 
     override(customConfig) {
-        // Validate the custom config first
+        // Validate custom configuration
         const errors = validateConfig(customConfig);
         if (errors.length > 0) {
             console.error('Custom configuration validation errors:', errors);
             return false;
         }
 
-        // Deep merge the configurations
+        // Apply override with highest priority
         this.config = deepMerge(this.config, customConfig);
         return true;
     }
 
     reset() {
-        this.config = { ...defaultConfig };
+        // Clear all sources except default
+        this.sources.localStorage = null;
+        this.sources.dataAttributes = null;
+        
+        // Reset to default configuration
+        this.config = { ...this.sources.default };
+        
+        // Clear localStorage
+        localStorage.removeItem('snakeGameConfig');
     }
 
-    // Add configuration persistence
     saveToLocalStorage() {
         try {
-            localStorage.setItem('snakeGameConfig', JSON.stringify(this.config));
+            // Only save non-default values
+            const diffConfig = this.getDifferenceFromDefault();
+            if (Object.keys(diffConfig).length > 0) {
+                localStorage.setItem('snakeGameConfig', JSON.stringify(diffConfig));
+            } else {
+                localStorage.removeItem('snakeGameConfig');
+            }
             return true;
         } catch (error) {
             console.error('Failed to save configuration:', error);
@@ -193,22 +283,50 @@ class ConfigManager {
         }
     }
 
-    loadFromLocalStorage() {
-        try {
-            const saved = localStorage.getItem('snakeGameConfig');
-            if (saved) {
-                const config = JSON.parse(saved);
-                const errors = validateConfig(config);
-                if (errors.length === 0) {
-                    this.config = config;
-                    return true;
+    getDifferenceFromDefault() {
+        const diff = {};
+        const compareObjects = (current, def, path = '') => {
+            for (const key in current) {
+                const currentValue = current[key];
+                const defaultValue = def[key];
+                const newPath = path ? `${path}.${key}` : key;
+
+                if (typeof currentValue === 'object' && currentValue !== null &&
+                    typeof defaultValue === 'object' && defaultValue !== null) {
+                    const subDiff = compareObjects(currentValue, defaultValue, newPath);
+                    if (Object.keys(subDiff).length > 0) {
+                        diff[key] = subDiff;
+                    }
+                } else if (currentValue !== defaultValue) {
+                    if (!path) {
+                        diff[key] = currentValue;
+                    } else {
+                        let target = diff;
+                        const parts = path.split('.');
+                        parts.forEach((part, index) => {
+                            if (index === parts.length - 1) {
+                                target[key] = currentValue;
+                            } else {
+                                target[part] = target[part] || {};
+                                target = target[part];
+                            }
+                        });
+                    }
                 }
             }
-            return false;
-        } catch (error) {
-            console.error('Failed to load configuration:', error);
-            return false;
-        }
+            return diff;
+        };
+
+        return compareObjects(this.config, this.sources.default);
+    }
+
+    getConfigurationSources() {
+        return {
+            default: this.sources.default,
+            localStorage: this.sources.localStorage,
+            dataAttributes: this.sources.dataAttributes,
+            final: this.config
+        };
     }
 }
 

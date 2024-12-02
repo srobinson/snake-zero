@@ -3,6 +3,7 @@
  */
 export const validationRules = {
     board: {
+        preset: (value) => ['small', 'medium', 'large', 'fullscreen'].includes(value),
         width: (value) => value > 0 && Number.isInteger(value),
         height: (value) => value > 0 && Number.isInteger(value),
         cellSize: (value) => value > 0 && Number.isInteger(value),

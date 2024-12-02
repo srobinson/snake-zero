@@ -49,154 +49,162 @@ A modern, educational implementation of the classic Snake game, designed for chi
 
 ## ⚙️ Configuration
 
-Snake Zero features a powerful configuration system that allows customization of various game aspects.
+Snake Zero features a flexible configuration system with multiple ways to customize the game:
 
-### Difficulty Levels
+### HTML Data Attributes
+
+The easiest way to configure the game is through HTML data attributes:
+
+```html
+<div id="snaked-again-container"
+     data-snake-board-size="fullscreen"
+     data-snake-cell-size="20"
+     data-snake-difficulty="normal">
+</div>
+```
+
+#### Available Data Attributes
+
+1. **Board Size** (`data-snake-board-size`)
+   - Values: `small`, `medium`, `large`, `fullscreen`
+   - Controls the game board dimensions
+   - Example: `data-snake-board-size="medium"`
+
+2. **Cell Size** (`data-snake-cell-size`)
+   - Values: `10` to `100` (pixels)
+   - Controls the size of grid cells
+   - Example: `data-snake-cell-size="20"`
+
+3. **Difficulty** (`data-snake-difficulty`)
+   - Values: `easy`, `normal`, `hard`
+   - Controls game speed and mechanics
+   - Example: `data-snake-difficulty="normal"`
+
+### Configuration Priority
+
+The game uses a clear configuration hierarchy:
+
+1. HTML Data Attributes (Highest Priority)
+   - Overrides all other settings
+   - Perfect for quick customization
+
+2. Local Storage Configuration
+   - Persists between sessions
+   - Stores user preferences
+
+3. Default Configuration (Lowest Priority)
+   - Fallback values
+   - Base game settings
+
+### JavaScript Configuration
+
+For more advanced customization, you can modify the configuration through JavaScript:
 
 ```javascript
-{
+// Get the game's configuration manager
+import configManager from './src/config/gameConfig.js';
+
+// Example 1: Override specific settings
+configManager.override({
     difficulty: {
-        current: 'normal',  // 'easy', 'normal', or 'hard'
+        current: 'hard',
         presets: {
-            easy: {
-                baseSpeed: 5,
-                powerUpChance: 0.02
-            },
-            normal: {
-                baseSpeed: 8,
-                powerUpChance: 0.01
-            },
             hard: {
-                baseSpeed: 12,
-                powerUpChance: 0.005
+                baseSpeed: 15,      // Custom speed
+                powerUpChance: 0.01 // Custom power-up frequency
             }
         }
     }
-}
-```
+});
 
-### Speed Progression
-
-The snake's speed increases as you collect food, making the game progressively more challenging:
-
-```javascript
-{
-    snake: {
-        speedProgression: {
-            enabled: true,          // Enable/disable speed progression
-            increasePerFood: 0.2,   // Speed increase per food eaten
-            maxSpeed: 15,          // Maximum speed cap
-            initialSpeedBoost: 1.5, // Speed power-up multiplier
-            slowEffect: 0.5        // Slow power-up multiplier
-        }
-    }
-}
-```
-
-### Board Size Options
-
-The game supports multiple board sizes that can be changed during gameplay:
-
-```javascript
-{
+// Example 2: Custom board configuration
+configManager.override({
     board: {
-        preset: 'fullscreen',  // Current preset: 'small', 'medium', 'large', or 'fullscreen'
+        preset: 'custom',
         presets: {
-            small: { width: 400, height: 400, cellSize: 20 },    // 20x20 grid
-            medium: { width: 800, height: 600, cellSize: 20 },   // 40x30 grid
-            large: { width: 1200, height: 800, cellSize: 20 },   // 60x40 grid
-            fullscreen: { width: "window.innerWidth", height: "window.innerHeight", cellSize: 50 }  // Custom cell size
-        }
-    }
-}
-```
-
-You can initialize the game in fullscreen with custom settings by either:
-
-1. Modifying the config before game starts:
-```javascript
-const config = {
-    board: {
-        preset: 'fullscreen',
-        presets: {
-            fullscreen: {
-                width: window.innerWidth,
-                height: window.innerHeight,
-                cellSize: 50  // Custom cell size
+            custom: {
+                width: 1000,
+                height: 800,
+                cellSize: 25
             }
         }
     }
-};
-window.setGameConfig(config);
+});
+
+// Example 3: Reset to defaults
+configManager.reset();
+
+// Example 4: Save current configuration
+configManager.saveToLocalStorage();
 ```
 
-2. Or using the debug controls during gameplay:
-   - R: Toggle fullscreen mode
-   - Use + and - keys to adjust cell size to 50
+The configuration manager provides methods to:
+- `override(config)`: Apply custom settings
+- `reset()`: Restore default settings
+- `saveToLocalStorage()`: Persist settings
+- `getConfig()`: Get current configuration
 
-You can change the board size during gameplay using:
-- Q: Switch to small board
-- W: Switch to medium board
-- E: Switch to large board
-- R: Toggle fullscreen mode
+### Board Presets
 
-### Sound Settings
+The game comes with predefined board sizes that can be selected via data attributes or JavaScript:
 
 ```javascript
-window.setGameConfig({
-    sound: {
-        enabled: true,
-        volume: 0.7,
-        music: {
-            enabled: true,
-            volume: 0.5
-        }
+// Available board presets
+const boardPresets = {
+    small: {     // Perfect for quick games
+        width: 400, 
+        height: 400, 
+        cellSize: 20    // 20x20 grid
+    },
+    medium: {    // Balanced gameplay
+        width: 800, 
+        height: 600, 
+        cellSize: 20    // 40x30 grid
+    },
+    large: {     // Challenge mode
+        width: 1200, 
+        height: 800, 
+        cellSize: 20    // 60x40 grid
+    },
+    fullscreen: {  // Immersive experience
+        width: "auto",    // Adapts to window width
+        height: "auto",   // Adapts to window height
+        cellSize: 20      // Responsive grid
     }
-});
-```
-
-### Visual Customization
-
-```javascript
-window.setGameConfig({
-    visuals: {
-        background: [51, 51, 51],  // RGB values
-        grid: {
-            color: [100, 100, 100],
-            weight: 1
-        },
-        particles: {
-            enabled: true
-        }
-    }
-});
-```
-
-### Combo System
-
-```javascript
-window.setGameConfig({
-    combo: {
-        timeoutMs: 3000,  // Time to maintain combo
-        visual: {
-            pulseOnIncrease: true
-        }
-    }
-});
+}
 ```
 
 ## 🎲 Game Mechanics
 
-- Snake grows when eating food
-- Game ends if snake hits walls or itself (except in ghost mode)
-- Power-ups appear randomly with special effects:
-  - Speed boost
-  - Slow motion
-  - Ghost mode (pass through walls)
-  - Double points
-- Combo system multiplies score up to 8x
-- Achievements unlock for special accomplishments
-- Progress and high scores are automatically saved
+### Movement
+- Use Arrow keys or WASD for directional control
+- Swipe gestures on touch devices
+- Smooth, responsive controls
+
+### Scoring
+- Each food item: 10 points
+- Power-ups provide bonus points
+- Score multiplies with consecutive quick catches
+
+### Power-ups
+- Speed boost: Temporary speed increase
+- Ghost mode: Pass through walls
+- Points multiplier: Double points
+- Random spawn rate based on difficulty
+
+### Difficulty Progression
+- Speed increases as you collect food
+- Power-up frequency adjusts with difficulty
+- Custom difficulty presets available
+
+## 🎯 Educational Goals
+
+Snake Zero is designed to help children develop:
+- Hand-eye coordination
+- Strategic thinking
+- Quick decision making
+- Pattern recognition
+- Spatial awareness
 
 ## 🛠️ Technical Details
 
@@ -227,27 +235,20 @@ snake-zero/
 └── README.md                 # Documentation
 ```
 
-## 🎨 Design Philosophy
+## 🤝 Contributing
 
-- **Child-Friendly**: Simple, intuitive interface for young players
-- **Engaging**: Dynamic effects, sounds, and achievements
-- **Configurable**: Extensive customization options
-- **Performant**: Optimized for smooth gameplay
-- **Modular**: Clean, maintainable code structure
-- **Responsive**: Works on both desktop and mobile
-
-## 🔄 Future Enhancements
-
-- Additional achievement types
-- More power-up variations
-- Multiplayer support
-- Custom themes
-- Educational mode with math challenges
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## 📝 License
 
-MIT License - feel free to use and modify as needed!
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-## 🤝 Contributing
+## 🙏 Acknowledgments
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+- Original Snake game concept
+- p5.js library and community
+- Contributors and testers

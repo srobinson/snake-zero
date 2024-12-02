@@ -1,7 +1,92 @@
 import configManager from '../config/gameConfig.js';
 import { PowerUp } from '../entities/PowerUp.js';
 
+/**
+ * @typedef {Object} DebugConfig
+ * @property {boolean} enabled - Whether debug mode is enabled
+ * @property {string|string[]} shortcutKey - Key(s) to toggle debug panel
+ * @property {number} fontSize - Font size for debug text
+ * @property {string} position - Panel position ('top-left'|'top-right'|'bottom-left'|'bottom-right')
+ * @property {number} padding - Padding inside debug panel
+ * @property {string} backgroundColor - Panel background color
+ * @property {string} textColor - Text color
+ * @property {boolean} showFPS - Show FPS counter
+ * @property {boolean} showSnakeInfo - Show snake stats
+ * @property {boolean} showGridInfo - Show grid information
+ * @property {boolean} showEffects - Show active effects
+ * @property {boolean} showControls - Show debug controls
+ * @property {Object} controls - Debug control key mappings
+ * @property {Object} controls.grid - Grid control keys
+ * @property {string} controls.grid.increaseCellSize - Key to increase cell size
+ * @property {string} controls.grid.decreaseCellSize - Key to decrease cell size
+ * @property {Object} controls.spawn - Power-up spawn keys
+ * @property {string} controls.spawn.speed - Key to spawn speed power-up
+ * @property {string} controls.spawn.ghost - Key to spawn ghost power-up
+ * @property {string} controls.spawn.points - Key to spawn points power-up
+ * @property {Object} controls.snake - Snake control keys
+ * @property {string} controls.snake.grow - Key to grow snake
+ * @property {Object} controls.board - Board size control keys
+ */
+
+/**
+ * @typedef {Object} Game
+ * @property {import('../core/Grid.js').Grid} grid - Game grid
+ * @property {import('../entities/Snake.js').Snake} snake - Snake entity
+ * @property {import('../entities/Food.js').Food} food - Food entity
+ * @property {PowerUp} powerUp - Power-up entity
+ * @property {Object} config - Game configuration
+ * @property {() => void} recreate - Recreates the game with current config
+ */
+
+/**
+ * @typedef {'small'|'medium'|'large'|'fullscreen'} BoardPreset
+ */
+
+/**
+ * Debug panel for development and testing.
+ * Provides real-time game information and debug controls.
+ * Features:
+ * - FPS counter
+ * - Snake statistics
+ * - Grid information
+ * - Active effects
+ * - Debug controls
+ * - Power-up spawning
+ * - Grid size controls
+ * @class
+ */
 export class DebugPanel {
+    /** @type {Game} */
+    game;
+    
+    /** @type {DebugConfig} */
+    config;
+    
+    /** @type {boolean} */
+    enabled;
+    
+    /** @type {boolean} */
+    visible;
+    
+    /** @type {number} */
+    lastFrameTime;
+    
+    /** @type {number} */
+    frameCount;
+    
+    /** @type {number} */
+    fps;
+    
+    /** @type {number} */
+    fpsUpdateInterval;
+    
+    /** @type {number} */
+    lastFpsUpdate;
+
+    /**
+     * Creates a new DebugPanel instance
+     * @param {Game} game - The game instance to debug
+     */
     constructor(game) {
         this.game = game;
         this.config = configManager.getConfig().debug;
@@ -14,6 +99,12 @@ export class DebugPanel {
         this.lastFpsUpdate = 0;
     }
 
+    /**
+     * Handles debug keyboard input
+     * @param {string} key - The key pressed
+     * @param {boolean} [isShiftPressed=false] - Whether shift is held
+     * @returns {boolean} True if the key was handled
+     */
     handleInput(key, isShiftPressed = false) {
         // Support both single key and array of keys for shortcuts
         const shortcuts = Array.isArray(this.config.shortcutKey) ? 
@@ -77,14 +168,26 @@ export class DebugPanel {
         // Check board size controls
         const boardControls = this.config.controls.board;
         if (Object.values(boardControls).includes(key)) {
-            const size = Object.entries(boardControls).find(([_, k]) => k === key)[0];
-            this.changeBoardSize(size);
-            return true;
+            const sizeEntry = Object.entries(boardControls).find(([_, k]) => k === key);
+            if (sizeEntry) {
+                const [size] = sizeEntry;
+                // Validate that size is a valid BoardPreset
+                if (size === 'small' || size === 'medium' || size === 'large' || size === 'fullscreen') {
+                    /** @type {BoardPreset} */
+                    const boardSize = size;
+                    this.changeBoardSize(boardSize);
+                    return true;
+                }
+            }
         }
         
         return false;
     }
 
+    /**
+     * Spawns a power-up of specified type
+     * @param {'speed'|'ghost'|'points'} type - Type of power-up to spawn
+     */
     spawnPowerUp(type) {
         // Create power-up with snake and food as obstacles
         this.game.powerUp = new PowerUp(
@@ -98,10 +201,17 @@ export class DebugPanel {
         }
     }
 
+    /**
+     * Toggles debug panel visibility
+     */
     toggle() {
         this.visible = !this.visible;
     }
 
+    /**
+     * Updates debug panel state
+     * @param {number} currentTime - Current game time in milliseconds
+     */
     update(currentTime) {
         if (!this.enabled) return;
 
@@ -114,6 +224,10 @@ export class DebugPanel {
         }
     }
 
+    /**
+     * Draws the debug panel
+     * @param {import('p5')} p5 - p5.js instance
+     */
     draw(p5) {
         if (!this.visible) return;
 
@@ -245,6 +359,10 @@ export class DebugPanel {
         p5.pop();
     }
 
+    /**
+     * Changes the game board size
+     * @param {BoardPreset} preset - Board size preset
+     */
     changeBoardSize(preset) {
         // Update config
         const config = configManager.getConfig();

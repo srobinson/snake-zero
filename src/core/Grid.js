@@ -1,4 +1,27 @@
+/**
+ * @typedef {Object} GridSize
+ * @property {number} width - Width of the grid in cells
+ * @property {number} height - Height of the grid in cells
+ * @property {number} pixelWidth - Width of the grid in pixels
+ * @property {number} pixelHeight - Height of the grid in pixels
+ */
+
+/**
+ * @typedef {Object} Position
+ * @property {number} x - X coordinate
+ * @property {number} y - Y coordinate
+ */
+
+/**
+ * Represents the game grid that manages the game board dimensions, cell sizes,
+ * and coordinate transformations between grid and pixel spaces.
+ * @class
+ */
 export class Grid {
+    /**
+     * Creates a new Grid instance
+     * @param {import('../config/gameConfig.js').GameConfig} config - The game configuration
+     */
     constructor(config) {
         this.config = config;
         this.backgroundColor = config.board.backgroundColor;
@@ -18,6 +41,14 @@ export class Grid {
         this.updateDimensions();
     }
 
+    /**
+     * Calculates the maximum allowed cell size based on dimensions
+     * @param {number} width - Grid width in pixels
+     * @param {number} height - Grid height in pixels
+     * @param {number} currentCellSize - Current cell size in pixels
+     * @returns {number} Maximum allowed cell size
+     * @private
+     */
     calculateMaxCellSize(width, height, currentCellSize) {
         // For fullscreen, calculate max cell size based on viewport
         if (this.config.board.preset === 'fullscreen') {
@@ -28,6 +59,9 @@ export class Grid {
         return 50; // Default max for windowed modes
     }
 
+    /**
+     * Updates the grid dimensions based on current configuration
+     */
     updateDimensions() {
         // Get board dimensions from preset if specified
         const boardConfig = this.config.board;
@@ -59,6 +93,11 @@ export class Grid {
         this.height = this.rows * this.cellSize;
     }
 
+    /**
+     * Updates the cell size and recalculates grid dimensions
+     * @param {number} newSize - New cell size in pixels
+     * @returns {boolean} True if size was updated successfully, false if constrained
+     */
     updateCellSize(newSize) {
         const preset = this.config.board.preset;
         const { width, height } = this.config.board.presets[preset];
@@ -80,6 +119,10 @@ export class Grid {
         return true; // Size was updated successfully
     }
 
+    /**
+     * Gets the current grid size in both cells and pixels
+     * @returns {GridSize} Grid dimensions
+     */
     getSize() {
         return {
             width: this.cols,
@@ -89,10 +132,19 @@ export class Grid {
         };
     }
 
+    /**
+     * Gets the current cell size in pixels
+     * @returns {number} Cell size in pixels
+     */
     getCellSize() {
         return this.cellSize;
     }
 
+    /**
+     * Gets the center pixel coordinates of a grid cell
+     * @param {Position} cell - Grid coordinates of the cell
+     * @returns {Position} Pixel coordinates of cell center
+     */
     getCellCenter(cell) {
         if (!cell || typeof cell.x === 'undefined' || typeof cell.y === 'undefined') {
             console.error('Invalid cell:', cell);
@@ -111,6 +163,11 @@ export class Grid {
         };
     }
 
+    /**
+     * Gets a random valid position on the grid
+     * @param {boolean} [avoidLast=true] - Whether to avoid the last random position
+     * @returns {Position} Random grid position
+     */
     getRandomPosition(avoidLast = true) {
         let newPosition;
         let attempts = 0;
@@ -141,14 +198,28 @@ export class Grid {
         return newPosition;
     }
 
+    /**
+     * Checks if a grid position is within bounds
+     * @param {number} x - X coordinate in grid space
+     * @param {number} y - Y coordinate in grid space
+     * @returns {boolean} True if position is valid
+     */
     isValidPosition(x, y) {
         return x >= 0 && x < this.cols && y >= 0 && y < this.rows;
     }
 
+    /**
+     * Draws the grid background
+     * @param {import('p5')} p5 - The p5.js instance
+     */
     drawBackground(p5) {
         p5.background(this.backgroundColor);
     }
 
+    /**
+     * Draws the grid lines
+     * @param {import('p5')} p5 - The p5.js instance
+     */
     drawGridLines(p5) {
         // Draw grid lines
         p5.stroke(this.gridColor);
@@ -165,11 +236,21 @@ export class Grid {
         }
     }
 
+    /**
+     * Draws the complete grid
+     * @param {import('p5')} p5 - The p5.js instance
+     */
     draw(p5) {
         this.drawBackground(p5);
         this.drawGridLines(p5);
     }
 
+    /**
+     * Converts grid coordinates to pixel coordinates
+     * @param {number} gridX - X coordinate in grid space
+     * @param {number} gridY - Y coordinate in grid space
+     * @returns {Position} Coordinates in pixel space
+     */
     toPixelCoords(gridX, gridY) {
         return {
             x: gridX * this.cellSize,
@@ -177,6 +258,12 @@ export class Grid {
         };
     }
 
+    /**
+     * Converts pixel coordinates to grid coordinates
+     * @param {number} pixelX - X coordinate in pixel space
+     * @param {number} pixelY - Y coordinate in pixel space
+     * @returns {Position} Coordinates in grid space
+     */
     toGridCoords(pixelX, pixelY) {
         return {
             x: Math.floor(pixelX / this.cellSize),

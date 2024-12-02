@@ -1,30 +1,88 @@
 import configManager from '../config/gameConfig.js';
 
+/**
+ * @typedef {Object} Position
+ * @property {number} x - X coordinate on the grid
+ * @property {number} y - Y coordinate on the grid
+ */
+
+/**
+ * @typedef {Object} Effect
+ * @property {import('../config/gameConfig.js').PowerUpType} type - Type of effect
+ * @property {number} startTime - Time when effect started
+ * @property {number} duration - Duration of effect in milliseconds
+ * @property {number} [boost] - Speed boost multiplier for speed effects
+ * @property {number} [multiplier] - Points multiplier for points effects
+ */
+
+/**
+ * @typedef {Object} SnakeSegmentConfig
+ * @property {number} size - Body segment size relative to cell
+ * @property {number} headSize - Head size relative to cell
+ * @property {number} headLength - Length of the snake's head
+ * @property {number} elevation - Elevation/height of the snake segments
+ * @property {number} cornerRadius - Radius for rounded corners
+ * @property {number} eyeSize - Size of the snake's eyes
+ * @property {number} pupilSize - Size of the snake's pupils
+ * @property {number} tongueLength - Length of the snake's tongue
+ * @property {number} tongueWidth - Width of the snake's tongue
+ * @property {number} tongueSpeed - Speed of tongue animation
+ * @property {number} tongueWagRange - Range of tongue wagging motion
+ */
+
+/**
+ * @typedef {import('../main.js').default} Game
+ */
+
+/**
+ * Represents the snake in the game, including its movement, effects, and rendering.
+ * The snake consists of segments (head and body), can move in four directions,
+ * and can be affected by various power-ups.
+ * @class
+ */
 export class Snake {
+    /**
+     * Creates a new Snake instance
+     * @param {import('../core/Grid.js').Grid} grid - The game grid instance
+     * @param {Game} game - The game instance
+     */
     constructor(grid, game) {
+        /** @type {import('../core/Grid.js').Grid} */
         this.grid = grid;
+        /** @type {Game} */
         this.game = game;
+        /** @type {import('../config/gameConfig.js').GameConfig} */
         this.config = game.config;
+        /** @type {Map<import('../config/gameConfig.js').PowerUpType, Effect[]>} */
         this.effects = new Map();
         
         // Initialize base properties
+        /** @type {Position[]} */
         this.segments = [];
+        /** @type {'up'|'down'|'left'|'right'} */
         this.direction = this.config.snake.initialDirection || 'right';
+        /** @type {'up'|'down'|'left'|'right'} */
         this.nextDirection = this.direction;
+        /** @type {number} */
         this.lastMoveTime = 0;
+        /** @type {number} */
         this.tongueWagTime = 0;
+        /** @type {number} */
         this.score = 0;
+        /** @type {boolean} */
         this.growing = false;
+        /** @type {number} */
         this.foodEaten = 0;
-        
-        // Get initial speed from difficulty settings
-        const difficultyBaseSpeed = this.config.difficulty.presets[this.config.difficulty.current].baseSpeed;
-        this.baseSpeed = difficultyBaseSpeed;
+        /** @type {number} */
+        this.baseSpeed = this.config.difficulty.presets[this.config.difficulty.current].baseSpeed;
         
         // Initialize snake segments
         this.reset();
     }
 
+    /**
+     * Resets the snake to its initial state at the center of the grid
+     */
     reset() {
         const snakeConfig = this.config.snake;
         const gridSize = this.grid.getSize();
@@ -59,11 +117,17 @@ export class Snake {
         
         // Reset speed to difficulty base speed
         const difficultyBaseSpeed = this.config.difficulty.presets[this.config.difficulty.current].baseSpeed;
+        
         this.baseSpeed = difficultyBaseSpeed;
         
         this.effects.clear();
     }
 
+    /**
+     * Updates the snake's position and state
+     * @param {number} currentTime - Current game time in milliseconds
+     * @returns {boolean} Whether the snake moved this update
+     */
     update(currentTime) {
         // Update tongue animation
         const config = this.config.snake;
@@ -119,6 +183,10 @@ export class Snake {
         return true;
     }
 
+    /**
+     * Sets the snake's direction, preventing 180-degree turns
+     * @param {'up'|'down'|'left'|'right'} newDirection - New direction to set
+     */
     setDirection(newDirection) {
         // Prevent 180-degree turns
         const opposites = {
@@ -133,6 +201,9 @@ export class Snake {
         }
     }
 
+    /**
+     * Makes the snake grow by one segment and updates score/speed
+     */
     grow() {
         this.growing = true;
         this.foodEaten = (this.foodEaten || 0) + 1;
@@ -153,6 +224,10 @@ export class Snake {
         }
     }
 
+    /**
+     * Checks if the snake has collided with walls or itself
+     * @returns {boolean} True if collision detected, false otherwise
+     */
     checkCollision() {
         const head = this.segments[0];
         const size = this.grid.getSize();
@@ -178,49 +253,31 @@ export class Snake {
         }
     }
 
+    /**
+     * Checks if the snake's head is colliding with food
+     * @param {import('./Food.js').Food} food - Food item to check collision with
+     * @returns {boolean} True if collision detected, false otherwise
+     */
     checkFoodCollision(food) {
         if (!food) return false;
         const head = this.segments[0];
         return head.x === food.position.x && head.y === food.position.y;
     }
 
+    /**
+     * Checks if the snake's head is colliding with a power-up
+     * @param {import('./PowerUp.js').PowerUp} powerUp - Power-up to check collision with
+     * @returns {boolean} True if collision detected, false otherwise
+     */
     checkPowerUpCollision(powerUp) {
         if (!powerUp) return false;
         const head = this.segments[0];
         return head.x === powerUp.position.x && head.y === powerUp.position.y;
     }
 
-    addEffect(type) {
-        const now = Date.now();
-        const config = this.config.snake.speedProgression;
-        
-        let effect = {
-            type,
-            startTime: now,
-            duration: this.config.powerUps.duration
-        };
-        
-        // Add effect-specific properties
-        switch(type) {
-            case 'speed':
-                effect.boost = config.initialSpeedBoost;
-                break;
-            case 'slow':
-                effect.boost = config.slowEffect;
-                break;
-            case 'points':
-                effect.multiplier = 2;
-                break;
-        }
-        
-        // Initialize or get the effect stack
-        if (!this.effects.has(type)) {
-            this.effects.set(type, []);
-        }
-        
-        this.effects.get(type).push(effect);
-    }
-
+    /**
+     * Updates active effects, removing expired ones
+     */
     updateEffects() {
         const now = Date.now();
         
@@ -239,6 +296,45 @@ export class Snake {
         }
     }
 
+    /**
+     * Adds a power-up effect to the snake
+     * @param {import('../config/gameConfig.js').PowerUpType} type - The type of effect to add
+     * @param {number} [duration] - Duration of the effect in milliseconds. If not provided, uses config default.
+     */
+    addEffect(type, duration) {
+        const now = Date.now();
+        const config = this.config.snake.speedProgression;
+        
+        let effect = {
+            type,
+            startTime: now,
+            duration: duration !== undefined ? duration : this.config.powerUps.duration
+        };
+        
+        // Add effect-specific properties
+        switch(type) {
+            case 'speed':
+                effect.boost = config.initialSpeedBoost;
+                break;
+            case 'ghost':
+                break;
+            case 'points':
+                effect.multiplier = 2;
+                break;
+        }
+        
+        // Initialize or get the effect stack
+        if (!this.effects.has(type)) {
+            this.effects.set(type, []);
+        }
+        
+        this.effects.get(type).push(effect);
+    }
+
+    /**
+     * Gets the snake's current speed including all active effects
+     * @returns {number} Current speed in cells per second
+     */
     getCurrentSpeed() {
         this.updateEffects();
         
@@ -256,6 +352,10 @@ export class Snake {
         return Math.max(1, this.baseSpeed * totalBoost);
     }
 
+    /**
+     * Gets the current points multiplier from active effects
+     * @returns {number} Current points multiplier
+     */
     getPointsMultiplier() {
         this.updateEffects();
         
@@ -264,11 +364,21 @@ export class Snake {
             pointsStacks[pointsStacks.length - 1].multiplier : 1;
     }
 
+    /**
+     * Checks if a specific effect is currently active
+     * @param {import('../config/gameConfig.js').PowerUpType} type - Type of effect to check
+     * @returns {boolean} True if effect is active, false otherwise
+     */
     hasEffect(type) {
         this.updateEffects();
         return this.effects.has(type);
     }
 
+    /**
+     * Gets the remaining time for a specific effect
+     * @param {import('../config/gameConfig.js').PowerUpType} type - Type of effect to check
+     * @returns {number} Remaining time in milliseconds, 0 if effect not active
+     */
     getEffectTimeRemaining(type) {
         this.updateEffects();
         
@@ -281,16 +391,25 @@ export class Snake {
         ));
     }
 
+    /**
+     * Gets the delay between moves based on current speed
+     * @returns {number} Delay in milliseconds
+     */
     getMoveDelay() {
         return 1000 / this.getCurrentSpeed();
     }
 
+    /**
+     * Draws the snake on the canvas
+     * @param {import('p5')} p5 - The p5.js instance
+     * @param {number} time - Current game time in milliseconds
+     */
     draw(p5, time) {
         const config = this.config.snake;
         const cellSize = this.grid.getCellSize();
-        const tongueWagTime = time % config.segments.tongueSpeed;
-        const tongueWagPhase = (tongueWagTime / config.segments.tongueSpeed) * Math.PI * 2;
-        const tongueWag = Math.sin(tongueWagPhase) * config.segments.tongueWagRange;
+        
+        // Calculate tongue wag
+        const tongueWagAmount = Math.sin(this.tongueWagTime) * config.segments.tongueWagRange;
 
         // Draw snake segments
         if (!this.segments || this.segments.length === 0) {
@@ -453,8 +572,7 @@ export class Snake {
                     
                     // Draw tongue
                     const isMoving = time - this.lastMoveTime < this.getMoveDelay() * 0.5;
-                    const tongueWag = isMoving ? 
-                        tongueWag : 0;
+                    const tongueWag = isMoving ? tongueWagAmount : 0;
                     
                     let tongueStart, tongueControl1, tongueControl2, tongueEnd;
                     
@@ -568,6 +686,10 @@ export class Snake {
         });
     }
 
+    /**
+     * Draws a speed vector for debugging
+     * @param {import('p5')} p5 - The p5.js instance
+     */
     drawSpeedVector(p5) {
         const head = this.segments[0];
         const headPos = this.grid.getCellCenter(head);

@@ -8,25 +8,56 @@ import { DebugPanel } from './core/DebugPanel.js';
 import { GameStateMachine, GameStates } from './core/GameStateMachine.js';
 import { EventSystem, GameEvents } from './core/EventSystem.js';
 
-class Game {
+/**
+ * Main game class that coordinates all game components and manages the game loop.
+ * @class
+ * @property {import('./config/gameConfig.js').GameConfig} config - Game configuration
+ * @property {Grid} grid - Game grid system
+ * @property {EventSystem} events - Event management system
+ * @property {GameStateMachine} stateMachine - Game state management
+ * @property {DebugPanel} debugPanel - Debug information panel
+ * @property {Snake} snake - Snake entity
+ * @property {Food} food - Food entity
+ * @property {PowerUp|null} powerUp - Current power-up entity
+ * @property {p5} p5 - p5.js instance
+ */
+export default class Game {
+    /**
+     * Creates a new Game instance.
+     * @constructor
+     */
     constructor() {
         // Load configuration first
         configManager.loadFromLocalStorage();
+        /** @type {import('./config/gameConfig.js').GameConfig} */
         this.config = configManager.getConfig();
         
         // Initialize game components
+        /** @type {Grid} */
         this.grid = new Grid(this.config);
+        /** @type {EventSystem} */
         this.events = new EventSystem();
+        /** @type {GameStateMachine} */
         this.stateMachine = new GameStateMachine(this);
+        /** @type {DebugPanel} */
         this.debugPanel = new DebugPanel(this);
+        /** @type {Snake} */
         this.snake = new Snake(this.grid, this);
+        /** @type {Food} */
         this.food = new Food(this.grid);
+        /** @type {PowerUp|null} */
         this.powerUp = null;
+        /** @type {p5|null} */
+        this.p5 = null;
         
         this.setupEventListeners();
         this.setupResizeHandler();
     }
 
+    /**
+     * Sets up game event listeners for food collection and collisions.
+     * @private
+     */
     setupEventListeners() {
         // Clear existing listeners first
         this.events.clear();
@@ -42,6 +73,10 @@ class Game {
         });
     }
 
+    /**
+     * Sets up window resize handler for fullscreen mode.
+     * @private
+     */
     setupResizeHandler() {
         window.addEventListener('resize', () => {
             // Only handle resize in fullscreen mode
@@ -57,12 +92,19 @@ class Game {
         });
     }
 
+    /**
+     * Initializes p5.js canvas and setup.
+     * @param {p5} p5 - p5.js instance
+     */
     setup(p5) {
         this.p5 = p5;
         const canvas = p5.createCanvas(this.grid.width, this.grid.height);
         canvas.parent('snaked-again-container');
     }
 
+    /**
+     * Updates game state, including snake movement, collisions, and power-ups.
+     */
     update() {
         if (!this.stateMachine.isInState(GameStates.PLAYING)) return;
 
@@ -75,7 +117,9 @@ class Game {
         if (this.snake.update(currentTime)) {
             // Check collisions after movement
             if (this.snake.checkCollision()) {
-                this.events.emit(GameEvents.COLLISION);
+                this.events.emit(GameEvents.COLLISION, {
+                    position: this.snake.segments[0] // Head position
+                });
                 return;
             }
 
@@ -84,14 +128,21 @@ class Game {
                 this.snake.grow();
                 const points = this.config.scoring.basePoints * this.snake.getPointsMultiplier();
                 this.stateMachine.updateScore(points);
-                this.events.emit(GameEvents.FOOD_COLLECTED);
-                this.events.emit(GameEvents.SCORE_CHANGED, this.stateMachine.score);
+                this.events.emit(GameEvents.FOOD_COLLECTED, {
+                    position: this.food.position
+                });
+                this.events.emit(GameEvents.SCORE_CHANGED, {
+                    score: this.stateMachine.score
+                });
             }
 
             // Check power-up collision
             if (this.powerUp && this.snake.checkPowerUpCollision(this.powerUp)) {
                 this.snake.addEffect(this.powerUp.type);
-                this.events.emit(GameEvents.POWER_UP_COLLECTED, this.powerUp.type);
+                this.events.emit(GameEvents.POWER_UP_COLLECTED, {
+                    powerUpType: this.powerUp.type,
+                    position: this.powerUp.position
+                });
                 this.powerUp = null;
             }
         }
@@ -103,6 +154,9 @@ class Game {
         }
     }
 
+    /**
+     * Draws the current game state based on the game state machine.
+     */
     draw() {
         // Draw background
         this.grid.drawBackground(this.p5);
@@ -125,19 +179,28 @@ class Game {
         }
     }
 
+    /**
+     * Draws the main game elements (snake, food, power-ups, score, debug).
+     * @private
+     */
     drawGame() {
+        const currentTime = this.p5.millis();
         this.grid.drawGridLines(this.p5);
         // Draw game entities
         this.food.draw(this.p5);
         if (this.powerUp) {
             this.powerUp.draw(this.p5);
         }
-        this.snake.draw(this.p5);
+        this.snake.draw(this.p5, currentTime);
                 
         this.drawScore();
         this.debugPanel.draw(this.p5);
     }
 
+    /**
+     * Draws the main menu screen.
+     * @private
+     */
     drawMenu() {
         const p5 = this.p5;
         p5.fill(255);
@@ -153,6 +216,10 @@ class Game {
         p5.text('Use Arrow Keys or WASD to move', this.grid.width/2, this.grid.height/2 + 80);
     }
 
+    /**
+     * Draws the pause overlay.
+     * @private
+     */
     drawPauseOverlay() {
         const p5 = this.p5;
         
@@ -163,6 +230,10 @@ class Game {
         p5.text('PAUSED', this.grid.width - 10, 10);
     }
 
+    /**
+     * Draws the game over screen.
+     * @private
+     */
     drawGameOver() {
         const p5 = this.p5;
         p5.fill(0, 0, 0, 200);
@@ -184,14 +255,23 @@ class Game {
         p5.text('Press ESC for Menu', this.grid.width/2, this.grid.height/2 + 110);
     }
 
+    /**
+     * Draws the current score.
+     * @private
+     */
     drawScore() {
         this.p5.fill(255);
         this.p5.noStroke();
-        this.p5.textSize(20);
         this.p5.textAlign(this.p5.LEFT, this.p5.TOP);
-        this.p5.text(`Score: ${this.stateMachine.score}`, 10, 10);
+        this.p5.text(`Score: ${this.stateMachine.score}`, 10, 10, this.p5.millis());
     }
 
+    /**
+     * Handles keyboard input for game controls.
+     * @param {string} key - Key pressed
+     * @param {boolean} isShiftPressed - Whether shift key is held
+     * @returns {boolean} Whether the input was handled
+     */
     handleInput(key, isShiftPressed) {
         // Handle debug panel input first
         if (this.debugPanel.handleInput(key, isShiftPressed)) {
@@ -242,6 +322,9 @@ class Game {
         }
     }
 
+    /**
+     * Recreates the game with current configuration.
+     */
     recreate() {
         // Save current state
         const wasPlaying = this.stateMachine.isInState(GameStates.PLAYING);
@@ -273,6 +356,9 @@ class Game {
         }
     }
 
+    /**
+     * Resets the game state.
+     */
     reset() {
         this.snake = new Snake(this.grid, this);
         this.food = new Food(this.grid);
@@ -286,6 +372,11 @@ let touchStartX = 0;
 let touchStartY = 0;
 const MIN_SWIPE_DISTANCE = 30;
 
+/**
+ * Handles touch start event.
+ * @param {Event & { touches?: TouchList }} event - Touch event from browser
+ * @returns {boolean} Whether the event was handled
+ */
 function touchStarted(event) {
     if (event.touches && event.touches[0]) {
         touchStartX = event.touches[0].clientX;
@@ -294,6 +385,11 @@ function touchStarted(event) {
     return false;
 }
 
+/**
+ * Handles touch end event.
+ * @param {Event & { changedTouches?: TouchList }} event - Touch event from browser
+ * @returns {boolean} Whether the event was handled
+ */
 function touchEnded(event) {
     if (!event.changedTouches || !event.changedTouches[0]) return false;
 

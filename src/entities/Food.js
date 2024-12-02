@@ -1,18 +1,53 @@
 import configManager from '../config/gameConfig.js';
 
+/**
+ * @typedef {Object} Position
+ * @property {number} x - X coordinate on the grid
+ * @property {number} y - Y coordinate on the grid
+ */
+
+/**
+ * @typedef {Object} Obstacle
+ * @property {Array<{x: number, y: number}>} segments - Array of positions representing obstacle segments
+ */
+
+/**
+ * Represents a food item in the game that the snake can collect.
+ * Food items have a position on the grid, a color, and maintain a history
+ * of recent positions to prevent spawning in the same place repeatedly.
+ * @class
+ */
 export class Food {
+    /**
+     * Creates a new Food instance
+     * @param {import('../core/Grid.js').Grid} grid - The game grid instance
+     */
     constructor(grid) {
+        /** @type {import('../core/Grid.js').Grid} */
         this.grid = grid;
+        /** @type {import('../config/gameConfig.js').FoodConfig} */
         this.config = configManager.getConfig().food;
+        /** @type {Position} */
         this.position = this.getRandomPosition();
+        /** @type {string} */
         this.color = this.getRandomColor();
+        /** @type {Set<string>} */
         this.lastPositions = new Set(); // Keep track of recent positions
     }
 
+    /**
+     * Gets a random valid position on the grid
+     * @returns {Position} Random position coordinates
+     */
     getRandomPosition() {
         return this.grid.getRandomPosition(true);
     }
 
+    /**
+     * Gets a random color from the configured colors array.
+     * Ensures the same color is not chosen twice in a row if possible.
+     * @returns {string} Hex color code
+     */
     getRandomColor() {
         const colors = this.config.colors;
         const lastColor = this.color;
@@ -26,6 +61,11 @@ export class Food {
         return newColor;
     }
 
+    /**
+     * Respawns the food at a new random position, avoiding obstacles and recent positions.
+     * Also updates the food's color and maintains a history of recent positions.
+     * @param {Array<Obstacle>} [obstacles=[]] - Array of obstacles to avoid when spawning
+     */
     respawn(obstacles = []) {
         let newPosition;
         let attempts = 0;
@@ -61,6 +101,10 @@ export class Food {
         }
     }
 
+    /**
+     * Draws the food item on the canvas with visual effects (pulsing and rotation).
+     * @param {import('p5')} p5 - The p5.js instance
+     */
     draw(p5) {
         const { x, y } = this.grid.toPixelCoords(this.position.x, this.position.y);
         const cellSize = this.grid.getCellSize();

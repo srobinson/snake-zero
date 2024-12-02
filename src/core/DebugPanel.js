@@ -28,6 +28,7 @@ import { PowerUp } from '../entities/PowerUp.js';
  * @property {string} controls.spawn.speed - Key to spawn speed power-up
  * @property {string} controls.spawn.ghost - Key to spawn ghost power-up
  * @property {string} controls.spawn.points - Key to spawn points power-up
+ * @property {string} controls.spawn.slow - Key to spawn slow power-up
  * @property {Object} controls.snake - Snake control keys
  * @property {string} controls.snake.grow - Key to grow snake
  * @property {Object} controls.board - Board size control keys
@@ -126,6 +127,15 @@ export class DebugPanel {
             const oldSize = presets[currentPreset].cellSize;
             const newSize = oldSize + 5;
 
+            // Update both the current preset and fullscreen preset
+            presets[currentPreset].cellSize = newSize;
+            if (currentPreset === 'fullscreen') {
+                // In fullscreen, also update dimensions based on new cell size
+                const { innerWidth, innerHeight } = window;
+                presets.fullscreen.width = innerWidth;
+                presets.fullscreen.height = innerHeight;
+            }
+
             // Only update if the size change was successful
             if (this.game.grid.updateCellSize(newSize)) {
                 this.game.recreate();
@@ -137,6 +147,15 @@ export class DebugPanel {
             const presets = this.game.config.board.presets;
             const oldSize = presets[currentPreset].cellSize;
             const newSize = oldSize - 5;
+
+            // Update both the current preset and fullscreen preset
+            presets[currentPreset].cellSize = newSize;
+            if (currentPreset === 'fullscreen') {
+                // In fullscreen, also update dimensions based on new cell size
+                const { innerWidth, innerHeight } = window;
+                presets.fullscreen.width = innerWidth;
+                presets.fullscreen.height = innerHeight;
+            }
 
             // Only update if the size change was successful
             if (this.game.grid.updateCellSize(newSize)) {
@@ -155,6 +174,9 @@ export class DebugPanel {
             return true;
         } else if (spawnControls.points === key) {
             this.spawnPowerUp('points');
+            return true;
+        } else if (spawnControls.slow === key) {
+            this.spawnPowerUp('slow');
             return true;
         }
 
@@ -186,7 +208,7 @@ export class DebugPanel {
 
     /**
      * Spawns a power-up of specified type
-     * @param {'speed'|'ghost'|'points'} type - Type of power-up to spawn
+     * @param {'speed'|'ghost'|'points'|'slow'} type - Type of power-up to spawn
      */
     spawnPowerUp(type) {
         // Create power-up with snake and food as obstacles
@@ -327,8 +349,8 @@ export class DebugPanel {
                 currentY += lineHeight;
             } else {
                 effects.forEach(([effect, stacks]) => {
-                    const timeLeft = this.game.snake.getEffectTimeRemaining(effect) / 1000;
-                    let effectText = `${effect}: ${timeLeft.toFixed(1)}s`;
+                    const timeLeft = this.game.snake.getEffectTimeRemaining(effect);
+                    let effectText = `${effect}: ${(timeLeft / 1000).toFixed(1)}s`;
                     
                     if (effect === 'points') {
                         effectText += ` (${this.game.snake.getPointsMultiplier()}x)`;

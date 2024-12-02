@@ -1,26 +1,24 @@
 import configManager from '../config/gameConfig.js';
-import { PowerUpTypes, isValidPowerUpType, createPowerUpEffect } from '../types/powerUpTypes.js';
+import { PowerUpTypes, isValidPowerUpType } from '../types/powerUpTypes.js';
+import { PowerUpRenderer } from '../powerups/PowerUpRenderer.js';
+import { powerUpConfig } from '../powerups/PowerUpConfig.js';
 
 /**
- * @typedef {Object} Position
- * @property {number} x - X coordinate on the grid
- * @property {number} y - Y coordinate on the grid
+ * @typedef {import('../types/commonTypes.js').Position} Position
  */
 
 /**
  * @typedef {Object} Obstacle
- * @property {Array<{x: number, y: number}>} [segments] - Array of positions representing obstacle segments
+ * @property {Array<Position>} [segments] - Array of positions representing obstacle segments
  * @property {Position} [position] - Single position representing an obstacle
  */
 
-/**
- * Represents a power-up item in the game that provides temporary effects when collected.
- * Power-ups have a position, type (e.g., 'speed', 'ghost', 'points'), and visual effects.
- * @class
- */
 export class PowerUp {
     /** @type {import('../core/Grid.js').Grid} */
     #grid;
+
+    /** @type {PowerUpRenderer} */
+    #renderer;
 
     /** @type {import('../types/powerUpTypes.js').PowerUpConfig} */
     #config;
@@ -34,12 +32,6 @@ export class PowerUp {
     /** @type {number} */
     #spawnTime;
 
-    /** @type {number} */
-    #pulseSpeed;
-
-    /** @type {number} */
-    #rotateSpeed;
-
     /**
      * Creates a new PowerUp instance
      * @param {import('../core/Grid.js').Grid} grid - The game grid instance
@@ -48,27 +40,33 @@ export class PowerUp {
     constructor(grid, obstacles = []) {
         this.#grid = grid;
         const gameConfig = configManager.getConfig();
-        /** @type {import('../types/powerUpTypes.js').PowerUpConfig} */
         this.#config = {
             types: gameConfig.powerUps.types,
             spawnChance: gameConfig.powerUps.spawnChance,
-            duration: gameConfig.powerUps.duration,
             effects: {
-                speed: { speedMultiplier: 1.5 },
-                ghost: { ghostMode: true },
-                points: { pointsMultiplier: 2 },
-                slow: { slowMultiplier: 0.5 }
+                speed: { 
+                    speedMultiplier: 1.5,
+                    duration: gameConfig.powerUps.effects.speed.duration
+                },
+                ghost: { 
+                    ghostMode: true,
+                    duration: gameConfig.powerUps.effects.ghost.duration
+                },
+                points: { 
+                    pointsMultiplier: 2,
+                    duration: gameConfig.powerUps.effects.points.duration
+                },
+                slow: { 
+                    slowMultiplier: 0.5,
+                    duration: gameConfig.powerUps.effects.slow.duration
+                }
             },
-            colors: {
-                ...gameConfig.powerUps.colors,
-                slow: '#607D8B' // Adding missing slow power-up color
-            }
+            colors: gameConfig.powerUps.colors,
+            visual: powerUpConfig.visual
         };
         this.#position = this.#getRandomPosition(obstacles);
         this.#type = this.#getRandomType();
         this.#spawnTime = Date.now();
-        this.#pulseSpeed = 0.1;
-        this.#rotateSpeed = 0.05;
     }
 
     /**
@@ -126,7 +124,7 @@ export class PowerUp {
      * @fires Snake#power_up_started
      */
     apply(snake) {
-        snake.addEffect(this.#type, this.#config.duration);
+        snake.addEffect(this.#type);
     }
 
     /**
@@ -165,125 +163,20 @@ export class PowerUp {
     }
 
     /**
-     * Draws the power-up on the canvas with visual effects (pulsing and rotation)
+     * Draws the power-up on the canvas
      * @param {import('p5')} p5 - The p5.js instance
      */
     draw(p5) {
-        const coords = this.#grid.toPixelCoords(this.#position.x, this.#position.y);
-        const cellSize = this.#grid.getCellSize();
-
-        // Create a pulsing/rotating effect
-        const pulseAmount = Math.sin(p5.frameCount * this.#pulseSpeed) * 0.2 + 0.8;
-        const rotateAmount = p5.frameCount * this.#rotateSpeed;
-
-        p5.push();
-        p5.translate(coords.x + cellSize / 2, coords.y + cellSize / 2);
-        p5.rotate(rotateAmount);
-
-        // Draw power-up shape with type-specific color
-        p5.noStroke();
-        p5.fill(this.#config.colors[this.#type]);
-
-        const size = cellSize * 0.6 * pulseAmount;
-        switch (this.#type) {
-            case PowerUpTypes.SPEED:
-                this.#drawSpeedPowerUp(p5, size);
-                break;
-            case PowerUpTypes.GHOST:
-                this.#drawGhostPowerUp(p5, size);
-                break;
-            case PowerUpTypes.POINTS:
-                this.#drawPointsPowerUp(p5, size);
-                break;
-            case PowerUpTypes.SLOW:
-                this.#drawSlowPowerUp(p5, size);
-                break;
+        // Create renderer if not exists
+        if (!this.#renderer) {
+            this.#renderer = new PowerUpRenderer(p5, this.#grid, powerUpConfig);
         }
-
-        p5.pop();
-    }
-
-    /**
-     * Draws a speed power-up (lightning bolt)
-     * @param {import('p5')} p5 - The p5.js instance
-     * @param {number} size - Size of the power-up
-     */
-    #drawSpeedPowerUp(p5, size) {
-        const points = [
-            { x: -size/4, y: -size/2 },
-            { x: size/4, y: -size/4 },
-            { x: 0, y: 0 },
-            { x: size/4, y: size/4 },
-            { x: -size/4, y: size/2 }
-        ];
-
-        p5.beginShape();
-        points.forEach(point => p5.vertex(point.x, point.y));
-        p5.endShape(p5.CLOSE);
-    }
-
-    /**
-     * Draws a ghost power-up (ghost shape)
-     * @param {import('p5')} p5 - The p5.js instance
-     * @param {number} size - Size of the power-up
-     */
-    #drawGhostPowerUp(p5, size) {
-        const halfSize = size / 2;
-        p5.arc(0, 0, size, size, p5.PI, 0);
-        p5.rect(-halfSize, 0, size, halfSize/2);
         
-        const waveHeight = size/6;
-        const segments = 3;
-        p5.beginShape();
-        for (let i = 0; i <= segments; i++) {
-            const x = -halfSize + (size * i/segments);
-            const y = halfSize/2 + Math.sin(i * p5.PI) * waveHeight;
-            p5.vertex(x, y);
-        }
-        p5.endShape();
-    }
-
-    /**
-     * Draws a points power-up (star shape)
-     * @param {import('p5')} p5 - The p5.js instance
-     * @param {number} size - Size of the power-up
-     */
-    #drawPointsPowerUp(p5, size) {
-        const points = 5;
-        const halfSize = size / 2;
-        const innerRadius = halfSize * 0.4;
-
-        p5.beginShape();
-        for (let i = 0; i < points * 2; i++) {
-            const radius = i % 2 === 0 ? halfSize : innerRadius;
-            const angle = (i * p5.PI) / points;
-            const x = Math.cos(angle) * radius;
-            const y = Math.sin(angle) * radius;
-            p5.vertex(x, y);
-        }
-        p5.endShape(p5.CLOSE);
-    }
-
-    /**
-     * Draws a slow power-up (hourglass shape)
-     * @param {import('p5')} p5 - The p5.js instance
-     * @param {number} size - Size of the power-up
-     */
-    #drawSlowPowerUp(p5, size) {
-        const halfSize = size / 2;
-        const neckWidth = size * 0.2;
-        
-        p5.beginShape();
-        // Top triangle
-        p5.vertex(-halfSize, -halfSize);
-        p5.vertex(halfSize, -halfSize);
-        p5.vertex(neckWidth/2, 0);
-        p5.vertex(-neckWidth/2, 0);
-        // Bottom triangle
-        p5.vertex(-halfSize, halfSize);
-        p5.vertex(halfSize, halfSize);
-        p5.vertex(neckWidth/2, 0);
-        p5.vertex(-neckWidth/2, 0);
-        p5.endShape(p5.CLOSE);
+        // Draw using renderer
+        this.#renderer.draw(
+            this.#position,
+            this.#type,
+            this.#config.colors[this.#type]
+        );
     }
 }

@@ -8,6 +8,13 @@ import { DebugPanel } from './core/DebugPanel.js';
 import { GameStateMachine, GameStates } from './core/GameStateMachine.js';
 import { EventSystem, GameEvents } from './core/EventSystem.js';
 import { Particles } from './core/Particles.js';
+import { PowerupBadge } from './ui/PowerupBadge.js';
+
+/**
+ * @typedef {Object} Position
+ * @property {number} x - X coordinate on the grid
+ * @property {number} y - Y coordinate on the grid
+ */
 
 /**
  * Main game class that coordinates all game components and manages the game loop.
@@ -53,6 +60,10 @@ export default class Game {
         this.p5 = null;
         /** @type {Particles} */
         this.particles = null;
+        /** @type {Map<string, PowerupBadge>} */
+        this.activePowerups = new Map(); // Store active powerup badges
+        /** @type {PowerupBadge[]} */
+        this.floatingBadges = []; // Store floating badges
         
         this.setupEventListeners();
         this.setupResizeHandler();
@@ -157,6 +168,7 @@ export default class Game {
             // Check power-up collision
             if (this.powerUp && this.snake.checkPowerUpCollision(this.powerUp)) {
                 this.snake.addEffect(this.powerUp.type);
+                this.applyPowerup(this.powerUp.type, this.powerUp.position);
                 this.events.emit(GameEvents.POWER_UP_COLLECTED, {
                     powerUpType: this.powerUp.type,
                     position: this.powerUp.position
@@ -170,6 +182,77 @@ export default class Game {
         if (!this.powerUp && Math.random() < difficulty.powerUpChance) {
             this.powerUp = new PowerUp(this.grid, [this.snake, this.food]);
         }
+    }
+
+    /**
+     * Applies a power-up effect to the snake.
+     * @param {string} type - Power-up type
+     * @param {Position} powerUpPosition - Power-up position
+     */
+    applyPowerup(type, powerUpPosition) {
+        // Get powerup duration from config
+        const duration = this.config.powerUps.effects[type].duration;
+        this.addPowerupBadge(type, powerUpPosition);
+        
+        // Create pop-in particle effect at snake's head
+        const position = this.snake.segments[0];
+        this.particles.createPowerUpEffect(position, type);
+    }
+
+    addPowerupBadge(type, powerUpPosition) {
+        const config = this.config.powerupBadges;
+        const cellSize = this.grid.getCellSize();
+        
+        // Scale factors based on cell size range (10-100px)
+        const baseScale = Math.max(0.5, Math.min(1, cellSize / 50)); // Normalized to 50px cell size
+        
+        // Calculate sizes with cell-size appropriate scaling
+        const badgeSize = cellSize * (cellSize < 20 ? 2.0 : 1.2); // Reduced multiplier for better fit
+        const badgeSpacing = cellSize * 0.4; // Slightly reduced spacing
+        const margin = cellSize;
+        
+        // Get powerup position in pixel coordinates
+        const powerUpPos = this.grid.getCellCenter(powerUpPosition);
+        
+        // Create UI progress badge with effect-specific duration
+        const badgeCount = this.activePowerups.size;
+        const effectDuration = this.config.powerUps.effects[type].duration;
+        const remainingDuration = this.snake.getEffectTimeRemaining(type);
+        const uiBadge = new PowerupBadge(
+            this.p5,
+            type,
+            {
+                ...config,
+                duration: remainingDuration || effectDuration, // Use remaining duration if available
+                size: badgeSize,
+                popInScale: 1.15, // Slightly reduced pop scale
+                hoverAmplitude: cellSize * 0.08 // Reduced hover amplitude
+            },
+            margin + (badgeCount * (badgeSize + badgeSpacing)),
+            margin,
+            false // isFloating = false
+        );
+        this.activePowerups.set(type, uiBadge);
+
+        // Create floating badge at collection point
+        const floatingBadgeSize = cellSize * (cellSize < 20 ? 2.5 : 1.8); // Reduced floating badge size
+        const floatingBadge = new PowerupBadge(
+            this.p5,
+            type,
+            {
+                ...config,
+                duration: 1500,
+                popInDuration: 300,
+                popInScale: 1.2,
+                hoverAmplitude: cellSize * 0.15,
+                hoverFrequency: 3,
+                size: floatingBadgeSize
+            },
+            powerUpPos.x,
+            powerUpPos.y,
+            true // isFloating = true
+        );
+        this.floatingBadges.push(floatingBadge);
     }
 
     /**
@@ -220,18 +303,26 @@ export default class Game {
             this.powerUp.draw(this.p5);
         }
         
-        // Update active power-up effects
-        if (this.snake.effects.size > 0) {
-            const snakeHead = this.snake.segments[0];
-            for (const [type, _] of this.snake.effects.entries()) {
-                this.particles.updateActiveEffect(type, snakeHead);
-            }
-        }
-        
+        // Draw snake and update particle effects
         this.snake.draw(this.p5, currentTime);
-        
-        // Update particle effects
         this.particles.update();
+        this.particles.draw();
+        
+        // Draw active powerup badges in UI
+        for (const [type, badge] of this.activePowerups) {
+            if (!badge.update()) {
+                this.activePowerups.delete(type);
+                continue;
+            }
+            badge.draw();
+        }
+
+        // Draw floating badges at collection points
+        this.floatingBadges = this.floatingBadges.filter(badge => {
+            if (!badge.update()) return false;
+            badge.draw();
+            return true;
+        });
         
         this.drawScore();
         this.debugPanel.draw(this.p5);
@@ -412,58 +503,41 @@ let touchStartX = 0;
 let touchStartY = 0;
 const MIN_SWIPE_DISTANCE = 30;
 
-/**
- * Handles touch start event.
- * @param {Event & { touches?: TouchList }} event - Touch event from browser
- * @returns {boolean} Whether the event was handled
- */
-function touchStarted(event) {
-    if (event.touches && event.touches[0]) {
-        touchStartX = event.touches[0].clientX;
-        touchStartY = event.touches[0].clientY;
-    }
-    return false;
-}
-
-/**
- * Handles touch end event.
- * @param {Event & { changedTouches?: TouchList }} event - Touch event from browser
-@param {Event & { touches?: TouchList }} event@param {Event & { touches?: TouchList }} event * @returns {boolean} Whether the event was handled
- */
-function touchEnded(event) {
-    if (!event.changedTouches || !event.changedTouches[0]) return false;
-
-    const touchEndX = event.changedTouches[0].clientX;
-    const touchEndY = event.changedTouches[0].clientY;
-
-    const deltaX = touchEndX - touchStartX;
-    const deltaY = touchEndY - touchStartY;
-
-    if (Math.abs(deltaX) < MIN_SWIPE_DISTANCE && Math.abs(deltaY) < MIN_SWIPE_DISTANCE) {
-        return false;
-    }
-
-    if (Math.abs(deltaX) > Math.abs(deltaY)) {
-        // Horizontal swipe
-        if (deltaX > 0) {
-            game.handleInput('ArrowRight');
-        } else {
-            game.handleInput('ArrowLeft');
-        }
-    } else {
-        // Vertical swipe
-        if (deltaY > 0) {
-            game.handleInput('ArrowDown');
-        } else {
-            game.handleInput('ArrowUp');
-        }
-    }
-    return false;
-}
-
 // Prevent default touch behavior to avoid scrolling
 document.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
 document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+
+// p5.js touch handlers
+function touchStarted(event) {
+    if (!game) return false;
+    touchStartX = event.touches ? event.touches[0].clientX : event.clientX;
+    touchStartY = event.touches ? event.touches[0].clientY : event.clientY;
+    return false;
+}
+
+function touchEnded(event) {
+    if (!game) return false;
+    
+    const touchEndX = event.changedTouches ? event.changedTouches[0].clientX : event.clientX;
+    const touchEndY = event.changedTouches ? event.changedTouches[0].clientY : event.clientY;
+    
+    const deltaX = touchEndX - touchStartX;
+    const deltaY = touchEndY - touchStartY;
+    
+    // Only handle if we have a significant swipe
+    if (Math.abs(deltaX) > MIN_SWIPE_DISTANCE || Math.abs(deltaY) > MIN_SWIPE_DISTANCE) {
+        // Determine primary direction
+        if (Math.abs(deltaX) > Math.abs(deltaY)) {
+            // Horizontal swipe
+            game.snake.setDirection(deltaX > 0 ? 'right' : 'left');
+        } else {
+            // Vertical swipe
+            game.snake.setDirection(deltaY > 0 ? 'down' : 'up');
+        }
+    }
+    
+    return false;
+}
 
 // Initialize p5.js in instance mode
 new p5((p) => {
@@ -492,11 +566,6 @@ new p5((p) => {
         game.handleInput(key, isShiftPressed);
     };
 
-    p.touchStarted = () => {
-        touchStarted(event);
-    };
-
-    p.touchEnded = () => {
-        touchEnded(event);
-    };
+    p.touchStarted = touchStarted;
+    p.touchEnded = touchEnded;
 });

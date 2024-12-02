@@ -7,6 +7,7 @@ import { PowerUp } from './entities/PowerUp.js';
 import { DebugPanel } from './core/DebugPanel.js';
 import { GameStateMachine, GameStates } from './core/GameStateMachine.js';
 import { EventSystem, GameEvents } from './core/EventSystem.js';
+import { Particles } from './core/Particles.js';
 
 /**
  * Main game class that coordinates all game components and manages the game loop.
@@ -20,6 +21,7 @@ import { EventSystem, GameEvents } from './core/EventSystem.js';
  * @property {Food} food - Food entity
  * @property {PowerUp|null} powerUp - Current power-up entity
  * @property {p5} p5 - p5.js instance
+ * @property {Particles} particles - Particle effects system
  */
 export default class Game {
     /**
@@ -49,6 +51,8 @@ export default class Game {
         this.powerUp = null;
         /** @type {p5|null} */
         this.p5 = null;
+        /** @type {Particles} */
+        this.particles = null;
         
         this.setupEventListeners();
         this.setupResizeHandler();
@@ -63,9 +67,22 @@ export default class Game {
         this.events.clear();
         
         // Set up event listeners
-        this.events.on(GameEvents.FOOD_COLLECTED, () => {
-            // Pass snake as obstacle to avoid spawning on it
-            this.food.respawn([this.snake]);
+        this.events.on(GameEvents.FOOD_COLLECTED, (data) => {
+            if (data && data.position) {
+                // Get food color before respawning
+                const foodColor = this.food.color;
+                // Create food collection effect with the current food color
+                this.particles.createFoodEffect(data.position, foodColor);
+                // Respawn food after creating effect
+                this.food.respawn([this.snake]);
+            }
+        });
+
+        this.events.on(GameEvents.POWER_UP_COLLECTED, (data) => {
+            // Create power-up collection effect at the collected power-up position
+            if (data && data.position && data.powerUpType) {
+                this.particles.createPowerUpEffect(data.position, data.powerUpType);
+            }
         });
 
         this.events.on(GameEvents.COLLISION, () => {
@@ -100,6 +117,7 @@ export default class Game {
         this.p5 = p5;
         const canvas = p5.createCanvas(this.grid.width, this.grid.height);
         canvas.parent('snaked-again-container');
+        this.particles = new Particles(p5, this.grid, this);
     }
 
     /**
@@ -158,24 +176,32 @@ export default class Game {
      * Draws the current game state based on the game state machine.
      */
     draw() {
-        // Draw background
-        this.grid.drawBackground(this.p5);
-
-        switch (this.stateMachine.getState()) {
-            case GameStates.MENU:
-                this.drawMenu();
-                break;
-            case GameStates.PLAYING:
-            case GameStates.PAUSED:
-                this.drawGame();
-                if (this.stateMachine.isInState(GameStates.PAUSED)) {
+        if (this.p5) {
+            this.update();
+            this.p5.clear();
+            
+            switch (this.stateMachine.getState()) {
+                case GameStates.MENU:
+                    this.drawMenu();
+                    break;
+                case GameStates.PLAYING:
+                    this.drawGame();
+                    break;
+                case GameStates.PAUSED:
+                    this.drawGame();
                     this.drawPauseOverlay();
-                }
-                break;
-            case GameStates.GAME_OVER:
-                this.drawGame();
-                this.drawGameOver();
-                break;
+                    break;
+                case GameStates.GAME_OVER:
+                    this.drawGame();
+                    this.drawGameOver();
+                    break;
+            }
+            
+            // Update and draw particles
+            if (this.particles) {
+                this.particles.update();
+                this.particles.draw();
+            }
         }
     }
 
@@ -185,14 +211,28 @@ export default class Game {
      */
     drawGame() {
         const currentTime = this.p5.millis();
+        this.grid.drawBackground(this.p5);
         this.grid.drawGridLines(this.p5);
+        
         // Draw game entities
         this.food.draw(this.p5);
         if (this.powerUp) {
             this.powerUp.draw(this.p5);
         }
+        
+        // Update active power-up effects
+        if (this.snake.effects.size > 0) {
+            const snakeHead = this.snake.segments[0];
+            for (const [type, _] of this.snake.effects.entries()) {
+                this.particles.updateActiveEffect(type, snakeHead);
+            }
+        }
+        
         this.snake.draw(this.p5, currentTime);
-                
+        
+        // Update particle effects
+        this.particles.update();
+        
         this.drawScore();
         this.debugPanel.draw(this.p5);
     }

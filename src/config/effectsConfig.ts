@@ -1,11 +1,12 @@
-import configManager from './gameConfig.js';
+import configManager from './gameConfig';
+import { ParticleConfig, TrailConfig, EffectConfig, EffectsConfig } from './types';
 
 // Helper function to create lighter hue of a color
-function lightenColor(hex, percent) {
+function lightenColor(hex: string, percent: number): string {
     // Convert hex to RGB
-    let r = parseInt(hex.slice(1,3), 16);
-    let g = parseInt(hex.slice(3,5), 16);
-    let b = parseInt(hex.slice(5,7), 16);
+    let r = parseInt(hex.slice(1, 3), 16);
+    let g = parseInt(hex.slice(3, 5), 16);
+    let b = parseInt(hex.slice(5, 7), 16);
 
     // Convert to HSL and increase lightness
     r /= 255;
@@ -13,7 +14,7 @@ function lightenColor(hex, percent) {
     b /= 255;
     const max = Math.max(r, g, b);
     const min = Math.min(r, g, b);
-    let h, s, l = (max + min) / 2;
+    let h = 0, s, l = (max + min) / 2;
 
     if (max === min) {
         h = s = 0;
@@ -35,34 +36,25 @@ function lightenColor(hex, percent) {
     if (s === 0) {
         r2 = g2 = b2 = l;
     } else {
-        const hue2rgb = (p, q, t) => {
+        const hue2rgb = (p: number, q: number, t: number) => {
             if (t < 0) t += 1;
             if (t > 1) t -= 1;
-            if (t < 1/6) return p + (q - p) * 6 * t;
-            if (t < 1/2) return q;
-            if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+            if (t < 1 / 6) return p + (q - p) * 6 * t;
+            if (t < 1 / 2) return q;
+            if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
             return p;
         };
         const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
         const p = 2 * l - q;
-        r2 = hue2rgb(p, q, h + 1/3);
+        r2 = hue2rgb(p, q, h + 1 / 3);
         g2 = hue2rgb(p, q, h);
-        b2 = hue2rgb(p, q, h - 1/3);
+        b2 = hue2rgb(p, q, h - 1 / 3);
     }
 
-    // Convert back to hex
-    const toHex = x => {
-        const hex = Math.round(x * 255).toString(16);
-        return hex.length === 1 ? '0' + hex : hex;
-    };
-    
-    return `#${toHex(r2)}${toHex(g2)}${toHex(b2)}`;
+    return `#${Math.round(r2 * 255).toString(16).padStart(2, '0')}${Math.round(g2 * 255).toString(16).padStart(2, '0')}${Math.round(b2 * 255).toString(16).padStart(2, '0')}`;
 }
 
-/**
- * Configuration for visual effects and animations
- */
-export const effectsConfig = {
+export const effectsConfig: EffectsConfig = {
     particles: {
         food: {
             count: 12,

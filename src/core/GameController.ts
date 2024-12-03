@@ -1,0 +1,247 @@
+import { EventSystem } from './EventSystem';
+
+/** Possible game states */
+export type GameState = 'menu' | 'playing' | 'paused' | 'game_over';
+
+/** State transition definition */
+export interface StateTransition {
+    /** Source state */
+    from: GameState;
+    /** Target state */
+    to: GameState;
+}
+
+/** State data for various game states */
+export interface StateData {
+    /** Current game state */
+    state: GameState;
+    /** Current score (for GAME_OVER) */
+    score?: number;
+    /** High score (for GAME_OVER) */
+    highScore?: number;
+    /** Play time in ms (for PAUSED/GAME_OVER) */
+    playTime?: number;
+}
+
+/** Game interface for state machine */
+export interface Game {
+    /** Resets the game state */
+    reset(): void;
+    /** Event system instance */
+    events: EventSystem;
+}
+
+/** Possible game states */
+export const GameStates = {
+    /** Main menu state */
+    MENU: 'menu',
+    /** Active game state */
+    PLAYING: 'playing',
+    /** Paused game state */
+    PAUSED: 'paused',
+    /** Game over state */
+    GAME_OVER: 'game_over'
+} as const;
+
+/** Valid state transitions map */
+const VALID_TRANSITIONS: Record<GameState, GameState[]> = {
+    [GameStates.MENU]: [GameStates.PLAYING],
+    [GameStates.PLAYING]: [GameStates.PAUSED, GameStates.GAME_OVER],
+    [GameStates.PAUSED]: [GameStates.PLAYING, GameStates.MENU],
+    [GameStates.GAME_OVER]: [GameStates.MENU]
+};
+
+/**
+ * Game state machine that handles state transitions and associated logic.
+ * Manages the game's state lifecycle, including:
+ * - State transitions and validation
+ * - Score tracking and high score persistence
+ * - Game timing and pause functionality
+ */
+export class GameController {
+    /** Current game state */
+    private state: GameState;
+    
+    /** Game start time */
+    private startTime: number;
+    
+    /** Pause time */
+    private pauseTime: number;
+    
+    /** Current score */
+    private score: number;
+    
+    /** High score */
+    private highScore: number;
+
+    /** Game instance */
+    private game: Game;
+
+    /** Event system */
+    private events: EventSystem;
+
+    /**
+     * Creates a new GameController instance
+     * @param game - The game instance
+     */
+    constructor(game: Game) {
+        this.game = game;
+        this.state = GameStates.MENU;
+        this.startTime = 0;
+        this.pauseTime = 0;
+        this.score = 0;
+        this.highScore = this.#loadHighScore();
+        this.events = game.events;
+    }
+
+    /**
+     * Validates a state transition
+     * @param transition - The transition to validate
+     * @returns Whether the transition is valid
+     */
+    private validateTransition({ from, to }: StateTransition): boolean {
+        return VALID_TRANSITIONS[from]?.includes(to) ?? false;
+    }
+
+    /**
+     * Creates state data for event emission
+     * @param state - The state to create data for
+     * @returns State data for event
+     */
+    private createStateData(state: GameState): StateData {
+        const data: StateData = { state };
+        
+        switch (state) {
+            case GameStates.GAME_OVER:
+                data.score = this.score;
+                data.highScore = this.highScore;
+                data.playTime = this.getPlayTime();
+                break;
+            case GameStates.PAUSED:
+                data.playTime = this.getPlayTime();
+                break;
+        }
+        
+        return data;
+    }
+
+    /**
+     * Transitions to a new state if the transition is valid
+     * @param newState - The state to transition to
+     * @returns Whether the transition was successful
+     */
+    transition(newState: GameState): boolean {
+        const transition: StateTransition = { 
+            from: this.state, 
+            to: newState 
+        };
+        
+        if (!this.validateTransition(transition)) {
+            console.warn(`Invalid state transition: ${transition.from} -> ${transition.to}`);
+            return false;
+        }
+
+        // Handle state exit
+        switch (this.state) {
+            case GameStates.PLAYING:
+                if (newState === GameStates.PAUSED) {
+                    this.pauseTime = Date.now();
+                }
+                break;
+        }
+
+        // Handle state enter
+        switch (newState) {
+            case GameStates.PLAYING:
+                if (this.state === GameStates.MENU) {
+                    this.startTime = Date.now();
+                    this.score = 0;
+                    this.game.reset();
+                } else if (this.state === GameStates.PAUSED) {
+                    const pauseDuration = Date.now() - this.pauseTime;
+                    this.startTime += pauseDuration;
+                }
+                break;
+            case GameStates.GAME_OVER:
+                if (this.score > this.highScore) {
+                    this.highScore = this.score;
+                    this.saveHighScore();
+                }
+                break;
+        }
+
+        this.state = newState;
+        this.events.emit('state_changed', this.createStateData(newState));
+        return true;
+    }
+
+    /**
+     * Updates the current score
+     * @param points - Points to add to the current score
+     */
+    updateScore(points: number): void {
+        if (!this.isInState(GameStates.PLAYING)) return;
+        this.score += points;
+        this.events.emit('score_changed', { score: this.score });
+    }
+
+    /**
+     * Loads the high score from local storage
+     * @returns Stored high score or 0
+     */
+    #loadHighScore(): number {
+        const storedHighScore = localStorage.getItem('highScore');
+        return storedHighScore ? parseInt(storedHighScore, 10) : 0;
+    }
+
+    /**
+     * Saves the high score to local storage
+     */
+    private saveHighScore(): void {
+        localStorage.setItem('highScore', this.highScore.toString());
+    }
+
+    /**
+     * Checks if the game is in a specific state
+     * @param state - State to check
+     * @returns True if game is in the specified state
+     */
+    isInState(state: GameState): boolean {
+        return this.state === state;
+    }
+
+    /**
+     * Gets the current game state
+     * @returns Current state
+     */
+    getState(): GameState {
+        return this.state;
+    }
+
+    /**
+     * Gets the current score
+     * @returns Current score
+     */
+    getCurrentScore(): number {
+        return this.score;
+    }
+
+    /**
+     * Gets the current high score
+     * @returns Current high score
+     */
+    getCurrentHighScore(): number {
+        return this.highScore;
+    }
+
+    /**
+     * Calculates the total play time
+     * @returns Play time in milliseconds
+     */
+    getPlayTime(): number {
+        if (this.state === GameStates.PLAYING) {
+            return Date.now() - this.startTime;
+        }
+        return 0;
+    }
+}

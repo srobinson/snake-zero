@@ -23,7 +23,7 @@ const MAX_CELL_SIZE = 100;
 /**
  * Maps data attributes to configuration paths
  */
-const ATTRIBUTE_CONFIG_MAP = {
+const ATTRIBUTE_CONFIG_MAP: Record<string, string[]> = {
     'board-size': ['board', 'preset'],
     'cell-size': ['board', 'cellSize'],
     'difficulty': ['difficulty', 'current']
@@ -31,44 +31,44 @@ const ATTRIBUTE_CONFIG_MAP = {
 
 /**
  * Validates a board size value
- * @param {string} value - The board size value to validate
- * @returns {boolean} Whether the value is valid
+ * @param value - The board size value to validate
+ * @returns Whether the value is valid
  */
-function isValidBoardSize(value) {
+function isValidBoardSize(value: string): boolean {
     return VALID_BOARD_SIZES.includes(value.toLowerCase());
 }
 
 /**
  * Validates a cell size value
- * @param {string} value - The cell size value to validate
- * @returns {boolean} Whether the value is valid
+ * @param value - The cell size value to validate
+ * @returns Whether the value is valid
  */
-function isValidCellSize(value) {
+function isValidCellSize(value: string): boolean {
     const size = parseInt(value, 10);
     return !isNaN(size) && size >= MIN_CELL_SIZE && size <= MAX_CELL_SIZE;
 }
 
 /**
  * Validates a difficulty value
- * @param {string} value - The difficulty value to validate
- * @returns {boolean} Whether the value is valid
+ * @param value - The difficulty value to validate
+ * @returns Whether the value is valid
  */
-function isValidDifficulty(value) {
+function isValidDifficulty(value: string): boolean {
     return VALID_DIFFICULTIES.includes(value.toLowerCase());
 }
 
 /**
  * Extracts Snake game configuration from HTML data attributes
- * @param {HTMLElement} element - The element to extract configuration from
- * @returns {Object} The extracted configuration object
+ * @param element - The element to extract configuration from
+ * @returns The extracted configuration object
  */
-export function parseDataAttributes(element) {
+function parseDataAttributes(element: HTMLElement | null): Record<string, any> {
     if (!element) {
         console.warn('No element provided for data attribute parsing');
-        return null;
+        return {};
     }
 
-    const config = {};
+    const config: Record<string, any> = {};
     const attributes = element.attributes;
     
     // Iterate through all attributes
@@ -114,13 +114,13 @@ export function parseDataAttributes(element) {
 
 /**
  * Applies data attributes configuration to an existing config
- * @param {Object} baseConfig - The base configuration to extend
- * @param {HTMLElement} element - The element containing data attributes
- * @returns {Object} The merged configuration
+ * @param baseConfig - The base configuration to extend
+ * @param element - The element containing data attributes
+ * @returns The merged configuration
  */
-export function applyDataAttributes(baseConfig, element) {
+function applyDataAttributes(baseConfig: Record<string, any>, element: HTMLElement): Record<string, any> {
     const dataConfig = parseDataAttributes(element);
-    if (!dataConfig) return null;
+    if (!dataConfig) return {};
     
     const newConfig = { ...baseConfig };
     
@@ -150,3 +150,5 @@ export function applyDataAttributes(baseConfig, element) {
     
     return newConfig;
 }
+
+export { isValidBoardSize, isValidCellSize, isValidDifficulty, parseDataAttributes, applyDataAttributes };

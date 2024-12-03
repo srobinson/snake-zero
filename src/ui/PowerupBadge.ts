@@ -1,8 +1,40 @@
-import configManager from '../config/gameConfig.js';
-import { powerUpConfig } from '../powerups/PowerUpConfig.js';
+import p5 from 'p5';
+import configManager from '../config/gameConfig';
+import { powerUpConfig } from '../config/powerUpConfig';
+
+interface BadgeConfig {
+    size: number;
+    duration: number;
+    popInDuration: number;
+    popInScale: number;
+    hoverFrequency: number;
+    hoverAmplitude: number;
+}
+
+type PowerUpType = 'speed' | 'ghost' | 'points' | 'slow';
+
+interface Badge {
+    color: string;
+    icon: string;
+}
 
 export class PowerupBadge {
-    constructor(p5, type, config, x, y, isFloating) {
+    private p5: p5;
+    private type: PowerUpType;
+    private config: BadgeConfig;
+    private x: number;
+    private y: number;
+    private baseY: number;
+    private isFloating: boolean;
+    private startTime: number;
+    private size: number;
+    private alpha: number;
+    private scale: number;
+    private baseScale: number;
+    private currentScale: number;
+    private badges: Record<PowerUpType, Badge>;
+
+    constructor(p5: p5, type: PowerUpType, config: BadgeConfig, x: number, y: number, isFloating: boolean) {
         this.p5 = p5;
         this.type = type;
         this.config = config;
@@ -28,7 +60,7 @@ export class PowerupBadge {
         };
     }
 
-    update() {
+    update(): boolean {
         const elapsed = Date.now() - this.startTime;
         const remaining = this.config.duration - elapsed; // Duration is already in milliseconds
 
@@ -62,7 +94,7 @@ export class PowerupBadge {
         return remaining > 0;
     }
 
-    draw() {
+    draw(): void {
         const p5 = this.p5;
         const badge = this.badges[this.type];
         const elapsed = Date.now() - this.startTime;
@@ -76,7 +108,7 @@ export class PowerupBadge {
         p5.drawingContext.shadowBlur = 20;
         p5.drawingContext.shadowColor = badge.color;
         p5.noStroke();
-        p5.fill(badge.color + hex(Math.floor(this.alpha)));
+        p5.fill(badge.color + this.hex(Math.floor(this.alpha)));
         p5.circle(0, 0, this.size);
         p5.drawingContext.shadowBlur = 0;
 
@@ -99,15 +131,15 @@ export class PowerupBadge {
     }
 
     // Easing function for pop animation
-    easeOutBack(x) {
+    private easeOutBack(x: number): number {
         const c1 = 1.70158;
         const c3 = c1 + 1;
         return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
     }
-}
 
-// Convert number to hex string with alpha
-function hex(n) {
-    const h = Math.max(0, Math.min(255, n)).toString(16);
-    return h.length === 1 ? '0' + h : h;
+    // Convert number to hex string with alpha
+    private hex(n: number): string {
+        const h = Math.max(0, Math.min(255, n)).toString(16);
+        return h.length === 1 ? '0' + h : h;
+    }
 }

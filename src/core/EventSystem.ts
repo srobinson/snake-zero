@@ -1,26 +1,38 @@
-/**
- * @typedef {'food_collected'|'power_up_collected'|'power_up_expired'|'collision'|'score_changed'|'state_changed'|'speed_changed'} GameEvent
- */
+import { GameController } from './GameController';
 
-/**
- * @typedef {Object} EventData
- * @property {number} [score] - New score value for SCORE_CHANGED event
- * @property {import('./GameStateMachine').GameState} [state] - New game state for STATE_CHANGED event
- * @property {number} [speed] - New speed value for SPEED_CHANGED event
- * @property {string} [powerUpType] - Type of power-up for POWER_UP_COLLECTED/EXPIRED events
- * @property {Object} [position] - Position data for collision/collection events
- * @property {number} position.x - X coordinate
- * @property {number} position.y - Y coordinate
- * @property {number} [points] - Points value for FOOD_COLLECTED event
- * @property {number} [multiplier] - Points multiplier for FOOD_COLLECTED event
- */
+/** Game event types */
+export type GameEvent = 
+    | 'food_collected'
+    | 'power_up_collected'
+    | 'power_up_expired'
+    | 'collision'
+    | 'score_changed'
+    | 'state_changed'
+    | 'speed_changed';
 
-/**
- * Game events that can be emitted
- * @enum {GameEvent}
- * @readonly
- */
-export const GameEvents = /** @type {const} */ ({
+/** Event data structure for different event types */
+export interface EventData {
+    /** New score value for SCORE_CHANGED event */
+    score?: number;
+    /** New game state for STATE_CHANGED event */
+    state?: any;
+    /** New speed value for SPEED_CHANGED event */
+    speed?: number;
+    /** Type of power-up for POWER_UP_COLLECTED/EXPIRED events */
+    powerUpType?: string;
+    /** Position data for collision/collection events */
+    position?: {
+        x: number;
+        y: number;
+    };
+    /** Points value for FOOD_COLLECTED event */
+    points?: number;
+    /** Points multiplier for FOOD_COLLECTED event */
+    multiplier?: number;
+}
+
+/** Game events that can be emitted */
+export const GameEvents = {
     /** Emitted when food is collected by the snake */
     FOOD_COLLECTED: 'food_collected',
     /** Emitted when a power-up is collected by the snake */
@@ -35,17 +47,19 @@ export const GameEvents = /** @type {const} */ ({
     STATE_CHANGED: 'state_changed',
     /** Emitted when the snake's speed changes */
     SPEED_CHANGED: 'speed_changed'
-});
+} as const;
+
+/** Type for the event callback function */
+type EventCallback = (data: EventData) => void;
 
 /**
  * Simple event system for game events.
  * Provides a pub/sub interface for game components to communicate.
  * Handles event subscribe, unsubscribe, and emission with error handling.
- * @class
  */
 export class EventSystem {
-    /** @type {Map<GameEvent, Set<(data: EventData) => void>>} */
-    listeners;
+    /** Map of event listeners */
+    private listeners: Map<GameEvent, Set<EventCallback>>;
 
     constructor() {
         this.listeners = new Map();
@@ -53,15 +67,15 @@ export class EventSystem {
 
     /**
      * Subscribe to an event
-     * @param {GameEvent} event - Event to subscribe to
-     * @param {(data: EventData) => void} callback - Callback to execute when event is emitted
-     * @returns {() => void} Unsubscribe function that removes the callback when called
+     * @param event - Event to subscribe to
+     * @param callback - Callback to execute when event is emitted
+     * @returns Unsubscribe function that removes the callback when called
      */
-    on(event, callback) {
+    on(event: GameEvent, callback: EventCallback): () => void {
         if (!this.listeners.has(event)) {
             this.listeners.set(event, new Set());
         }
-        this.listeners.get(event).add(callback);
+        this.listeners.get(event)!.add(callback);
 
         // Return unsubscribe function
         return () => this.off(event, callback);
@@ -69,10 +83,10 @@ export class EventSystem {
 
     /**
      * Unsubscribe from an event
-     * @param {GameEvent} event - Event to unsubscribe from
-     * @param {(data: EventData) => void} callback - Callback to remove
+     * @param event - Event to unsubscribe from
+     * @param callback - Callback to remove
      */
-    off(event, callback) {
+    off(event: GameEvent, callback: EventCallback): void {
         const callbacks = this.listeners.get(event);
         if (callbacks) {
             callbacks.delete(callback);
@@ -84,11 +98,11 @@ export class EventSystem {
 
     /**
      * Emit an event with data
-     * @param {GameEvent} event - Event to emit
-     * @param {EventData} data - Data to pass to callbacks
-     * @throws {Error} If a callback throws an error, it will be caught and logged
+     * @param event - Event to emit
+     * @param data - Data to pass to callbacks
+     * @throws If a callback throws an error, it will be caught and logged
      */
-    emit(event, data) {
+    emit(event: GameEvent, data: EventData): void {
         const callbacks = this.listeners.get(event);
         if (callbacks) {
             callbacks.forEach(callback => {
@@ -105,7 +119,7 @@ export class EventSystem {
      * Clear all event listeners.
      * Useful for cleanup or resetting the event system.
      */
-    clear() {
+    clear(): void {
         this.listeners.clear();
     }
 }

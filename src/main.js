@@ -1,14 +1,14 @@
 import { default as p5 } from 'p5';
-import configManager from './config/gameConfig.js';
-import { Grid } from './core/Grid.js';
-import { Snake } from './entities/Snake.js';
-import { Food } from './entities/Food.js';
-import { PowerUp } from './entities/PowerUp.js';
-import { DebugPanel } from './core/DebugPanel.js';
-import { GameStateMachine, GameStates } from './core/GameStateMachine.js';
-import { EventSystem, GameEvents } from './core/EventSystem.js';
-import { Particles } from './core/Particles.js';
-import { PowerupBadge } from './ui/PowerupBadge.js';
+import configManager from './config/gameConfig';
+import { Grid } from './core/Grid';
+import { Snake } from './entities/Snake';
+import { Food } from './entities/Food';
+import { PowerUp } from './entities/PowerUp';
+import { DebugPanel } from './core/DebugPanel';
+import { GameController, GameStates } from './core/GameController';
+import { EventSystem, GameEvents } from './core/EventSystem';
+import { Particles } from './core/Particles';
+import { PowerupBadge } from './ui/PowerupBadge';
 
 /**
  * @typedef {Object} Position
@@ -22,7 +22,7 @@ import { PowerupBadge } from './ui/PowerupBadge.js';
  * @property {import('./config/gameConfig.js').GameConfig} config - Game configuration
  * @property {Grid} grid - Game grid system
  * @property {EventSystem} events - Event management system
- * @property {GameStateMachine} stateMachine - Game state management
+ * @property {GameController} stateMachine - Game state management
  * @property {DebugPanel} debugPanel - Debug information panel
  * @property {Snake} snake - Snake entity
  * @property {Food} food - Food entity
@@ -46,8 +46,8 @@ export default class Game {
         this.grid = new Grid(this.config);
         /** @type {EventSystem} */
         this.events = new EventSystem();
-        /** @type {GameStateMachine} */
-        this.stateMachine = new GameStateMachine(this);
+        /** @type {GameController} */
+        this.stateMachine = new GameController(this);
         /** @type {DebugPanel} */
         this.debugPanel = new DebugPanel(this);
         /** @type {Snake} */

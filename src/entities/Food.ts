@@ -1,16 +1,7 @@
-// @ts-check
-import configManager from '../config/gameConfig.js';
-
-/**
- * @typedef {Object} Position
- * @property {number} x - X coordinate
- * @property {number} y - Y coordinate
- */
-
-/**
- * @typedef {Object} Obstacle
- * @property {Array<{x: number, y: number}>} segments - Array of positions representing obstacle segments
- */
+import configManager from '../config/gameConfig';
+import type { FoodConfig } from '../config/types';
+import type { Game } from '../main';
+import type { Position, Obstacle, Grid, FoodType, FoodColors } from './types';
 
 /**
  * Represents a food item in the game that the snake can collect.
@@ -19,32 +10,34 @@ import configManager from '../config/gameConfig.js';
  * - Bonus: Crystal with energy arcs
  * - Golden: Portal with reality-bending effects
  */
+
 export class Food {
-    constructor(grid) {
+    private grid: Grid;
+    private config: FoodConfig;
+    private type: FoodType;
+    private position: Position;
+    private color: string;
+    private lastPositions: Set<string>;
+    private spawnTime: number;
+    private game?: Game;
+
+    constructor(grid: Grid) {
         this.grid = grid;
-        /** @type {import('../config/gameConfig.js').FoodConfig} */
         this.config = configManager.getConfig().food;
-        /** @type {'regular' | 'bonus' | 'golden'} */
         this.type = this.getRandomType();
-        /** @type {Position} */
         this.position = this.getRandomPosition();
-        /** @type {string} */
-        this.color = this.config.colors[this.type].primary;
-        /** @type {Set<string>} */
+        // Ensure color exists with type assertion since we know these colors are defined in config
+        this.color = this.config.colors[this.type].primary!;
         this.lastPositions = new Set();
-        /** @type {number} */
         this.spawnTime = Date.now();
-        
-        // Store reference to game instance from grid
-        /** @type {import('../main.js').default|undefined} */
         this.game = grid.game;
     }
 
-    getRandomPosition() {
+    private getRandomPosition(): Position {
         return this.grid.getRandomPosition(true);
     }
 
-    getRandomType() {
+    private getRandomType(): FoodType {
         const rand = Math.random();
         const rates = this.config.spawnRates;
         if (rand < rates.golden) return 'golden';
@@ -52,7 +45,7 @@ export class Food {
         return 'regular';
     }
 
-    getPoints() {
+    public getPoints(): number {
         // Get base points for this food type
         const basePoints = this.config.points[this.type];
         
@@ -65,12 +58,12 @@ export class Food {
         return basePoints;
     }
 
-    /**
-     * Respawns the food at a new random position, avoiding obstacles
-     * @param {Array<Obstacle>} [obstacles=[]] - Array of obstacles to avoid when spawning
-     */
-    respawn(obstacles = []) {
-        let newPosition;
+    public get segments(): Position[] {
+        return [this.position];
+    }
+
+    public respawn(obstacles: Obstacle[] = []): void {
+        let newPosition: Position;
         let attempts = 0;
         const maxAttempts = 100;
 
@@ -79,14 +72,11 @@ export class Food {
             attempts++;
 
             // Check if position conflicts with any obstacles or recent positions
-            const hasConflict = obstacles.some(obstacle => {
-                if (Array.isArray(obstacle.segments)) {
-                    return obstacle.segments.some(segment => 
-                        segment.x === newPosition.x && segment.y === newPosition.y
-                    );
-                }
-                return false;
-            }) || this.lastPositions.has(`${newPosition.x},${newPosition.y}`);
+            const hasConflict = obstacles.some(obstacle => 
+                obstacle.segments.some(segment => 
+                    segment.x === newPosition.x && segment.y === newPosition.y
+                )
+            ) || this.lastPositions.has(`${newPosition.x},${newPosition.y}`);
 
             if (!hasConflict) {
                 break;
@@ -96,32 +86,33 @@ export class Food {
         // Update position and type
         this.position = newPosition;
         this.type = this.getRandomType();
-        this.color = this.config.colors[this.type].primary;
+        // Ensure color exists with type assertion
+        this.color = this.config.colors[this.type].primary!;
         this.spawnTime = Date.now();
 
         // Add to recent positions (keep last 5)
         this.lastPositions.add(`${newPosition.x},${newPosition.y}`);
         if (this.lastPositions.size > 5) {
-            this.lastPositions.delete(this.lastPositions.values().next().value);
+            if (this.lastPositions.has(`${this.position.x},${this.position.y}`)) {
+                this.lastPositions.delete(`${this.position.x},${this.position.y}`);
+            }
         }
     }
 
-    /**
-     * Draws the food item using pixel art
-     * @param {import('p5')} p5 - The p5.js instance
-     */
-    draw(p5) {
+    public draw(p5: any): void {
         const cellSize = this.grid.cellSize;
         const pixelSize = cellSize * this.config.effects.pixelSize[this.type];
-        const colors = this.config.colors[this.type];
-        
+        const colors: FoodColors = this.config.colors[this.type];
+
         // Calculate animation offsets
         const bounceOffset = Math.sin(Date.now() / this.config.effects.bounceSpeed[this.type] * Math.PI * 2) * pixelSize;
         const sparklePhase = (Date.now() / this.config.effects.sparkleSpeed[this.type]) % 1;
         
         p5.push();
-        p5.translate(this.position.x * cellSize + cellSize / 2,
-                    this.position.y * cellSize + cellSize / 2 + bounceOffset);
+        p5.translate(
+            this.position.x * cellSize + cellSize / 2,
+            this.position.y * cellSize + cellSize / 2 + bounceOffset
+        );
 
         // Add glow effect
         const glowRadius = this.config.effects.glow[this.type];
@@ -148,11 +139,7 @@ export class Food {
         p5.pop();
     }
 
-    /**
-     * Draws an 8-bit style apple
-     * @private
-     */
-    drawApple(p5, pixelSize, colors) {
+    private drawApple(p5: any, pixelSize: number, colors: FoodColors): void {
         // Make the apple fill most of the cell
         const scale = 0.8;
         pixelSize *= scale;
@@ -192,11 +179,7 @@ export class Food {
         p5.rect(offsetX + pixelSize * 2, offsetY + pixelSize * 2, pixelSize, pixelSize);
     }
 
-    /**
-     * Draws pixel art cherries
-     * @private
-     */
-    drawCherries(p5, pixelSize, colors) {
+    private drawCherries(p5: any, pixelSize: number, colors: FoodColors): void {
         // Make the cherries fill most of the cell
         const scale = 0.9;
         pixelSize *= scale;
@@ -235,11 +218,7 @@ export class Food {
         p5.rect(offsetX + pixelSize * 7, offsetY + pixelSize, pixelSize, pixelSize);
     }
 
-    /**
-     * Draws pixel art star fruit with sparkle effect
-     * @private
-     */
-    drawStarFruit(p5, pixelSize, colors, sparklePhase) {
+    private drawStarFruit(p5: any, pixelSize: number, colors: FoodColors, sparklePhase: number): void {
         // Make the star fill most of the cell
         const scale = 0.9;
         pixelSize *= scale;
@@ -275,11 +254,7 @@ export class Food {
         }
     }
 
-    /**
-     * Helper to draw pixel arrays
-     * @private
-     */
-    drawPixelArray(p5, pixels, size, offsetX = 0, offsetY = 0) {
+    private drawPixelArray(p5: any, pixels: number[][], size: number, offsetX: number = 0, offsetY: number = 0): void {
         const outlineWeight = this.config.effects.outlineWeight[this.type];
         
         // Draw outline first if enabled

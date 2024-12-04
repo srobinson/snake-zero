@@ -1,6 +1,6 @@
 import p5 from 'p5';
 import { Grid } from '../entities/types';
-import Game from '../main';
+import type { SnakeGame } from '../types';
 import { effectsConfig } from '../config/effectsConfig';
 import { Position } from '../entities/types';
 import { Particle } from '../entities/Particle';
@@ -27,12 +27,12 @@ function hex(n: number): string {
 class Particles {
     private p5: p5;
     private grid: Grid;
-    private game: Game;
+    private game: SnakeGame;
     private particles: Particle[];
     private activeEffects: Map<string, any>;
     private lastEffectTime: Map<string, number>;
 
-    constructor(p5: p5, grid: Grid, game: Game) {
+    constructor(p5: p5, grid: Grid, game: SnakeGame) {
         this.p5 = p5;
         this.grid = grid;
         this.game = game;
@@ -75,7 +75,7 @@ class Particles {
             score: finalScore,
             text: finalScore.toString(),
             font: 'Bangers',
-            fontSize: this.grid.cellSize * (finalScore >= 100 ? 2.5 : 2.0)
+            fontSize: this.grid.getCellSize() * (finalScore >= 100 ? 2.5 : 2.0)
         };
 
         // Validate configuration before creating particle
@@ -85,7 +85,7 @@ class Particles {
                 center.x,
                 center.y,
                 scoreParticleConfig,
-                this.grid.cellSize
+                this.grid.getCellSize()
             );
             this.particles.push(scoreParticle);
         }
@@ -125,7 +125,7 @@ class Particles {
                     center.x,
                     center.y,
                     burstParticleConfig,
-                    this.grid.cellSize
+                    this.grid.getCellSize()
                 ));
             }
         }

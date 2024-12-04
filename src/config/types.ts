@@ -1,6 +1,8 @@
 // =========================================
 // Core Types
 // =========================================
+export type BoardPreset = 'small' | 'medium' | 'large' | 'fullscreen';
+
 /**
  * Main game data structure containing configuration and grid
  */
@@ -105,7 +107,7 @@ export interface GameConfig {
  */
 export interface BoardConfig {
     /** Currently selected board preset */
-    preset: string;
+    preset: BoardPreset;
     /** Available board presets */
     presets: {
         [key: string]: {

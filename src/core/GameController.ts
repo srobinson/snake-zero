@@ -1,4 +1,5 @@
 import { EventSystem } from './EventSystem';
+import type { SnakeGame } from '../types';
 
 /** Possible game states */
 export type GameState = 'menu' | 'playing' | 'paused' | 'game_over';
@@ -21,14 +22,6 @@ export interface StateData {
     highScore?: number;
     /** Play time in ms (for PAUSED/GAME_OVER) */
     playTime?: number;
-}
-
-/** Game interface for state machine */
-export interface Game {
-    /** Resets the game state */
-    reset(): void;
-    /** Event system instance */
-    events: EventSystem;
 }
 
 /** Possible game states */
@@ -75,7 +68,7 @@ export class GameController {
     private highScore: number;
 
     /** Game instance */
-    private game: Game;
+    private game: SnakeGame;
 
     /** Event system */
     private events: EventSystem;
@@ -84,14 +77,14 @@ export class GameController {
      * Creates a new GameController instance
      * @param game - The game instance
      */
-    constructor(game: Game) {
+    constructor(game: SnakeGame) {
         this.game = game;
         this.state = GameStates.MENU;
         this.startTime = 0;
         this.pauseTime = 0;
         this.score = 0;
         this.highScore = this.#loadHighScore();
-        this.events = game.events;
+        this.events = game.getEvents();
     }
 
     /**

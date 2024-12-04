@@ -1,8 +1,8 @@
 // @ts-ignore
 import configManager from '../config/gameConfig';
 import { PowerUp } from '../entities/PowerUp';
-import { Game } from '../types/Game';
-import { BoardPreset } from '../types/BoardTypes';
+import { SnakeGame } from '../types';
+import { BoardPreset } from '../config/types';
 
 type DebugConfig = {
     enabled: boolean;
@@ -36,7 +36,7 @@ type DebugConfig = {
 };
 
 export class DebugPanel {
-    private game: Game;
+    private game: SnakeGame;
     private config: DebugConfig;
     private enabled: boolean;
     private visible: boolean;
@@ -46,7 +46,7 @@ export class DebugPanel {
     private fpsUpdateInterval: number;
     private lastFpsUpdate: number;
 
-    constructor(game: Game) {
+    constructor(game: SnakeGame) {
         this.game = game;
         this.config = configManager.getConfig().debug;
         this.visible = this.config.enabled;
@@ -92,7 +92,7 @@ export class DebugPanel {
         // Snake controls
         const snakeControls = this.config.controls.snake;
         if (snakeControls.grow === key) {
-            this.game.snake.grow();
+            this.game.getSnake().grow();
             return true;
         }
 
@@ -111,8 +111,8 @@ export class DebugPanel {
     }
 
     private adjustCellSize(delta: number): boolean {
-        const currentPreset = this.game.config.board.preset;
-        const presets = this.game.config.board.presets;
+        const currentPreset = this.game.getConfig().board.preset;
+        const presets = this.game.getConfig().board.presets;
         const oldSize = presets[currentPreset].cellSize;
         const newSize = oldSize + delta;
 
@@ -123,15 +123,16 @@ export class DebugPanel {
             presets.fullscreen.height = innerHeight;
         }
 
-        return this.game.grid.updateCellSize(newSize) && this.game.recreate();
+        return this.game.getGrid().updateCellSize(newSize) && this.game.recreate();
     }
 
     spawnPowerUp(type: 'speed' | 'ghost' | 'points' | 'slow') {
-        this.game.powerUp = new PowerUp(
-            this.game.grid, 
-            [this.game.snake, this.game.food]
+        const newPowerUp = new PowerUp(
+            this.game.getGrid(), 
+            [this.game.getSnake(), this.game.getFood()]
         );
-        this.game.powerUp.setType(type);
+        newPowerUp.setType(type);
+        this.game.updatePowerUp(newPowerUp);
     }
 
     toggle() {
@@ -177,7 +178,7 @@ export class DebugPanel {
         if (this.config.showGridInfo) height += lineHeight * 3;
         if (this.config.showEffects) {
             height += lineHeight;
-            const effects = Array.from(this.game.snake.effects.entries());
+            const effects = Array.from(this.game.getSnake().effects.entries());
             height += (effects.length || 1) * lineHeight;
         }
         if (this.config.showControls) height += lineHeight * 4;
@@ -194,7 +195,7 @@ export class DebugPanel {
         let currentY = y + this.config.padding;
 
         // Draw current speed prominently at the top
-        const speed = this.game.snake.getCurrentSpeed();
+        const speed = this.game.getSnake().getCurrentSpeed();
         p5.textSize(this.config.fontSize * 1.5);
         p5.textAlign(p5.CENTER);
         p5.text(`${speed.toFixed(1)} cells/sec`, x + 100, currentY);
@@ -215,8 +216,8 @@ export class DebugPanel {
         }
 
         if (this.config.showSnakeInfo) {
-            const snake = this.game.snake;
-            const currentSpeed = snake.getCurrentSpeed ? snake.getCurrentSpeed() : this.game.config.snake.baseSpeed;
+            const snake = this.game.getSnake();
+            const currentSpeed = snake.getCurrentSpeed ? snake.getCurrentSpeed() : this.game.getConfig().snake.baseSpeed;
             
             p5.text(`Snake Length: ${snake.segments.length}`, x + this.config.padding, currentY);
             currentY += lineHeight;
@@ -229,9 +230,9 @@ export class DebugPanel {
         }
 
         if (this.config.showGridInfo) {
-            const size = this.game.grid.getSize();
-            const currentPreset = this.game.config.board.preset;
-            const cellSize = this.game.config.board.presets[currentPreset].cellSize;
+            const size = this.game.getGrid().getSize();
+            const currentPreset = this.game.getConfig().board.preset;
+            const cellSize = this.game.getConfig().board.presets[currentPreset].cellSize;
             p5.text(`Grid: ${size.width}x${size.height}`, x + this.config.padding, currentY);
             currentY += lineHeight;
             p5.text(`Cell Size: ${cellSize}px`, x + this.config.padding, currentY);
@@ -243,17 +244,17 @@ export class DebugPanel {
         if (this.config.showEffects) {
             p5.text('Active Effects:', x + this.config.padding, currentY);
             currentY += lineHeight;
-            const effects = Array.from(this.game.snake.effects.entries());
+            const effects = Array.from(this.game.getSnake().effects.entries());
             if (effects.length === 0) {
                 p5.text('None', x + this.config.padding + 10, currentY);
                 currentY += lineHeight;
             } else {
                 effects.forEach(([effect, stacks]) => {
-                    const timeLeft = this.game.snake.getEffectTimeRemaining(effect);
+                    const timeLeft = this.game.getSnake().getEffectTimeRemaining(effect);
                     let effectText = `${effect}: ${(timeLeft / 1000).toFixed(1)}s`;
                     
                     if (effect === 'points') {
-                        effectText += ` (${this.game.snake.getPointsMultiplier()}x)`;
+                        effectText += ` (${this.game.getSnake().getPointsMultiplier()}x)`;
                     } else if (effect === 'speed') {
                         effectText += ` (${stacks.length}x)`;
                     }
@@ -294,7 +295,7 @@ export class DebugPanel {
             config.board.height = Math.floor(window.innerHeight / cellSize);
         }
 
-        this.game.config = config;
+        this.game.setConfig(config);
         this.game.recreate();
     }
 }

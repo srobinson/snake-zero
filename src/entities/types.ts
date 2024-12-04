@@ -1,6 +1,3 @@
-import type { Game } from '../main';
-import type { PowerUpType } from '../config/types';
-
 // =========================================
 // Common Types
 // =========================================
@@ -12,6 +9,9 @@ export interface Position {
     y: number;
 }
 
+import type { SnakeGame } from '../types';
+import type { PowerUpType } from '../config/types';
+
 // =========================================
 // Grid Types
 // =========================================
@@ -19,11 +19,12 @@ export interface Position {
  * Represents a grid in the game
  */
 export interface Grid {
-    cellSize: number;
-    game?: Game;
+    game?: SnakeGame;
     getRandomPosition(avoidObstacles: boolean): Position;
     getCellCenter(position: Position): Position;
     getCellSize(): number;
+    getWidth(): number;
+    getHeight(): number;
 }
 
 // =========================================

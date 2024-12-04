@@ -1,4 +1,5 @@
 import type { GameConfig, BoardConfig } from '../config/gameConfig';
+import type { Position } from '../entities/types';
 
 /**
  * Represents grid size with dimensions in cells and pixels
@@ -11,36 +12,28 @@ export interface GridSize {
 }
 
 /**
- * Represents a 2D coordinate position
- */
-export interface Position {
-    x: number;
-    y: number;
-}
-
-/**
  * Represents the game grid that manages the game board dimensions, cell sizes,
  * and coordinate transformations between grid and pixel spaces.
  */
-export class Grid {
+export class Grid implements GridInterface {
     private config: GameConfig;
     private backgroundColor: string;
     private gridColor: string;
     private lastRandomPosition: Position | null = null;
-    
+
     // Additional properties from original JS implementation
     private cols: number = 0;
     private rows: number = 0;
     private width: number = 0;
     private height: number = 0;
-    
+
     private gridSize: GridSize = {
         width: 0,
         height: 0,
         pixelWidth: 0,
         pixelHeight: 0
     };
-    private cellSize: number = 20; // Default cell size
+    private _cellSize: number = 20; // Default cell size
 
     /**
      * Creates a new Grid instance
@@ -50,7 +43,7 @@ export class Grid {
         this.config = config;
         this.backgroundColor = config.board.backgroundColor;
         this.gridColor = config.board.gridColor;
-        
+
         // Update fullscreen preset dimensions before initializing
         if (this.config.board.preset === 'fullscreen') {
             this.config.board.presets.fullscreen = {
@@ -59,7 +52,6 @@ export class Grid {
                 height: window.innerHeight
             };
         }
-        
         // Initialize dimensions
         this.updateDimensions();
     }
@@ -85,7 +77,7 @@ export class Grid {
     /**
      * Updates the grid dimensions based on current configuration
      */
-    private updateDimensions(): void {
+    public updateDimensions(): void {
         // Get board dimensions from preset if specified
         const boardConfig = this.config.board;
         let { width, height, cellSize } = boardConfig.preset ? 
@@ -103,17 +95,17 @@ export class Grid {
 
         // Calculate maximum allowed cell size
         const maxCellSize = this.calculateMaxCellSize(width, height, cellSize);
-        
+
         // Ensure cell size is within bounds (10-maxCellSize)
-        this.cellSize = Math.min(Math.max(cellSize, 10), maxCellSize);
-        
+        this._cellSize = Math.min(Math.max(cellSize, 10), maxCellSize);
+
         // Calculate grid dimensions
-        this.cols = Math.floor(width / this.cellSize);
-        this.rows = Math.floor(height / this.cellSize);
-        
+        this.cols = Math.floor(width / this._cellSize);
+        this.rows = Math.floor(height / this._cellSize);
+
         // Adjust final dimensions to be divisible by cell size
-        this.width = this.cols * this.cellSize;
-        this.height = this.rows * this.cellSize;
+        this.width = this.cols * this._cellSize;
+        this.height = this.rows * this._cellSize;
 
         // Update gridSize
         this.gridSize = {
@@ -133,11 +125,10 @@ export class Grid {
     }
 
     /**
-     * Gets the current cell size in pixels
-     * @returns Cell size in pixels
+     * Gets the cell size in pixels 
      */
     getCellSize(): number {
-        return this.cellSize;
+        return this._cellSize;
     }
 
     /**
@@ -150,16 +141,16 @@ export class Grid {
             console.error('Invalid cell:', cell);
             return { x: 0, y: 0 }; // Return safe default
         }
-        
+
         const pixelCoords = this.toPixelCoords(cell.x, cell.y);
         if (!pixelCoords || typeof pixelCoords.x === 'undefined' || typeof pixelCoords.y === 'undefined') {
             console.error('Invalid pixel coordinates for cell:', cell);
             return { x: 0, y: 0 }; // Return safe default
         }
-        
+
         return {
-            x: pixelCoords.x + this.cellSize / 2,
-            y: pixelCoords.y + this.cellSize / 2
+            x: pixelCoords.x + this._cellSize / 2,
+            y: pixelCoords.y + this._cellSize / 2
         };
     }
 
@@ -171,8 +162,8 @@ export class Grid {
      */
     toPixelCoords(x: number, y: number): Position {
         return {
-            x: x * this.cellSize,
-            y: y * this.cellSize
+            x: x * this._cellSize,
+            y: y * this._cellSize
         };
     }
 
@@ -184,8 +175,8 @@ export class Grid {
      */
     toGridCoords(pixelX: number, pixelY: number): Position {
         return {
-            x: Math.floor(pixelX / this.cellSize),
-            y: Math.floor(pixelY / this.cellSize)
+            x: Math.floor(pixelX / this._cellSize),
+            y: Math.floor(pixelY / this._cellSize)
         };
     }
 
@@ -237,7 +228,7 @@ export class Grid {
         }
 
         // Update cell size
-        this.cellSize = newCellSize;
+        this._cellSize = newCellSize;
 
         // Recalculate grid size based on new cell size
         this.gridSize = {
@@ -273,13 +264,13 @@ export class Grid {
 
         // Vertical lines
         for (let x = 0; x <= this.cols; x++) {
-            const pixelX = x * this.cellSize;
+            const pixelX = x * this._cellSize;
             p5.line(pixelX, 0, pixelX, this.height);
         }
 
         // Horizontal lines
         for (let y = 0; y <= this.rows; y++) {
-            const pixelY = y * this.cellSize;
+            const pixelY = y * this._cellSize;
             p5.line(0, pixelY, this.width, pixelY);
         }
     }
@@ -292,4 +283,26 @@ export class Grid {
         this.drawBackground(p5);
         this.drawGridLines(p5);
     }
+
+    /**
+     * Gets the grid width in pixels
+     */
+    getWidth(): number {
+        return this.width;
+    }
+
+    /**
+     * Gets the grid height in pixels
+     */
+    getHeight(): number {
+        return this.height;
+    }
+}
+
+interface GridInterface {
+    getCellSize(): number;
+    getRandomPosition(avoidLast: boolean): Position;
+    getCellCenter(cell: Position): Position;
+    getWidth(): number;
+    getHeight(): number;
 }

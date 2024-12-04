@@ -1,6 +1,6 @@
 import configManager from '../config/gameConfig';
 import type { FoodConfig } from '../config/types';
-import type { Game } from '../main';
+import type { SnakeGame } from '../types';
 import type { Position, Obstacle, Grid, FoodType, FoodColors } from './types';
 
 /**
@@ -12,25 +12,32 @@ import type { Position, Obstacle, Grid, FoodType, FoodColors } from './types';
  */
 
 export class Food {
-    private grid: Grid;
-    private config: FoodConfig;
-    private type: FoodType;
-    private position: Position;
     private color: string;
+    private config: FoodConfig;
+    private game: SnakeGame;
+    private grid: Grid;
     private lastPositions: Set<string>;
+    private position: Position;
     private spawnTime: number;
-    private game?: Game;
+    private type: FoodType;
 
-    constructor(grid: Grid) {
+    constructor(grid: Grid, game: SnakeGame) {
         this.grid = grid;
+        this.game = game;
         this.config = configManager.getConfig().food;
         this.type = this.getRandomType();
-        this.position = this.getRandomPosition();
-        // Ensure color exists with type assertion since we know these colors are defined in config
         this.color = this.config.colors[this.type].primary!;
         this.lastPositions = new Set();
+        this.position = this.getRandomPosition();
         this.spawnTime = Date.now();
-        this.game = grid.game;
+    }
+
+    public getPosition(): Position {
+        return this.position;
+    }
+
+    public getColor(): string {
+        return this.color;
     }
 
     private getRandomPosition(): Position {
@@ -50,8 +57,9 @@ export class Food {
         const basePoints = this.config.points[this.type];
         
         // Apply 2x multiplier if points powerup is active
-        const powerups = this.game?.snake?.effects;
-        if (powerups?.has('points')) {
+        // Use optional chaining to safely get snake effects from game
+        const powerups = this.game?.getSnake().effects ?? new Set();
+        if (powerups.has('points')) {
             return basePoints * 2;
         }
         
@@ -100,7 +108,7 @@ export class Food {
     }
 
     public draw(p5: any): void {
-        const cellSize = this.grid.cellSize;
+        const cellSize = this.grid.getCellSize();
         const pixelSize = cellSize * this.config.effects.pixelSize[this.type];
         const colors: FoodColors = this.config.colors[this.type];
 

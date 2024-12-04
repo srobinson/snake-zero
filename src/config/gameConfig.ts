@@ -426,10 +426,6 @@ class ConfigManager {
     public getConfigurationSources(): { default: GameConfig | null; localStorage: GameConfig | null; dataAttributes: GameConfig | null } {
         return this.sources;
     }
-
-    public initializeConfig(): void {
-        this.loadFromLocalStorage();
-    }
 }
 
 export default new ConfigManager();

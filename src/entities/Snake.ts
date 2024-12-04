@@ -1,8 +1,8 @@
 import type P5 from 'p5';
 import configManager from '../config/gameConfig';
 import type { GameConfig, SnakeConfig, PowerUpType } from '../config/types';
+import type { SnakeGame } from '../types';
 import type { Grid } from '../core/Grid';
-import type { Game } from '../main';
 import type {
     Position,
     Effect,
@@ -16,7 +16,7 @@ import type {
  */
 export class Snake {
     private readonly grid: Grid;
-    private readonly game: Game;
+    private readonly game: SnakeGame;
     private readonly config: GameConfig;
     public readonly effects: Map<PowerUpType, Effect[]>;
     public readonly segments: Position[];
@@ -30,7 +30,7 @@ export class Snake {
     private moveInterval: number = 0;
     private snakeConfig: SnakeConfig;
 
-    constructor(grid: Grid, game: Game) {
+    constructor(grid: Grid, game: SnakeGame) {
         
         this.grid = grid;
         this.game = game;

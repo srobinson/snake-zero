@@ -16,18 +16,70 @@ export interface GameData {
 	};
 }
 
+/** Game event types */
+export type GameEvent =
+	| 'food_collected'
+	| 'power_up_collected'
+	| 'power_up_expired'
+	| 'collision'
+	| 'score_changed'
+	| 'state_changed'
+	| 'speed_changed';
+
+/** Event data structure for different event types */
+export interface EventData {
+	/** New score value for SCORE_CHANGED event */
+	score?: number;
+	/** New game state for STATE_CHANGED event */
+	state?: any;
+	/** New speed value for SPEED_CHANGED event */
+	speed?: number;
+	/** Type of power-up for POWER_UP_COLLECTED/EXPIRED events */
+	powerUpType?: string;
+	/** Position data for collision/collection events */
+	position?: {
+		x: number;
+		y: number;
+	};
+	/** Points value for FOOD_COLLECTED event */
+	points?: number;
+	/** Points multiplier for FOOD_COLLECTED event */
+	multiplier?: number;
+}
+
+/** Game events that can be emitted */
+export const GameEvents = {
+	/** Emitted when food is collected by the snake */
+	FOOD_COLLECTED: 'food_collected',
+	/** Emitted when a power-up is collected by the snake */
+	POWER_UP_COLLECTED: 'power_up_collected',
+	/** Emitted when a power-up effect expires */
+	POWER_UP_EXPIRED: 'power_up_expired',
+	/** Emitted when a collision occurs */
+	COLLISION: 'collision',
+	/** Emitted when the score changes */
+	SCORE_CHANGED: 'score_changed',
+	/** Emitted when the game state changes */
+	STATE_CHANGED: 'state_changed',
+	/** Emitted when the snake's speed changes */
+	SPEED_CHANGED: 'speed_changed',
+} as const;
+
+/** Type for the event callback function */
+export type EventCallback = (data: EventData) => void;
+
 // =========================================
 // Window Types
 // =========================================
 /**
  * Extend the global Window interface to include game data
  */
-// declare global {
-// 	interface Window {
-// 		/** Global game instance */
-// 		game?: GameData;
-// 	}
-// }
+declare global {
+	interface Window {
+		/** Global game instance */
+		game?: GameData;
+	}
+}
 
 /**
  * Custom window type with game data
@@ -90,13 +142,11 @@ export interface GameConfig {
 	/** Snake configuration */
 	snake: SnakeConfig;
 	/** Power-ups settings */
-	powerUps: PowerUpsConfig;
+	powerUps: PowerUpConfig;
 	/** Food configuration */
 	food: FoodConfig;
 	/** Optional scoring settings */
 	scoring?: ScoringConfig;
-	/** Optional power-up badge settings */
-	powerupBadges?: PowerupBadgesConfig;
 }
 
 // =========================================
@@ -132,6 +182,32 @@ export interface BoardConfig {
 	gridThickness: number;
 	/** Grid line opacity */
 	gridOpacity: number;
+}
+
+export interface GridInterface {
+	getCellSize(): number;
+	getRandomPosition(avoidLast: boolean): Position;
+	getCellCenter(cell: Position): Position;
+	getWidth(): number;
+	getHeight(): number;
+}
+
+/**
+ * Represents a 2D position
+ */
+export interface Position {
+	x: number;
+	y: number;
+}
+
+/**
+ * Represents grid size with dimensions in cells and pixels
+ */
+export interface GridSize {
+	width: number;
+	height: number;
+	pixelWidth: number;
+	pixelHeight: number;
 }
 
 // =========================================
@@ -377,78 +453,9 @@ export interface SpeedProgression {
 }
 
 // =========================================
-// Power-up Types and Configuration
-// =========================================
-/**
- * Available power-up types
- */
-export type PowerUpType = 'speed' | 'ghost' | 'points' | 'slow';
-
-/**
- * Power-ups configuration
- */
-export interface PowerUpsConfig {
-	/** Available power-up types */
-	types: PowerUpType[];
-	/** Chance of power-up spawning */
-	spawnChance: number;
-	/** Effect settings for each power-up type */
-	effects: {
-		[key: string]: any;
-	};
-	/** Color settings for power-ups */
-	colors: PowerUpColors;
-	/** Visual effect settings */
-	visual?: PowerUpVisual;
-}
-
-/**
- * Power-up color configuration
- */
-export interface PowerUpColors {
-	/** Color for points power-up */
-	points: string;
-	/** Color for slow power-up */
-	slow: string;
-	/** Color for speed power-up */
-	speed: string;
-	/** Color for ghost power-up */
-	ghost: string;
-	/** Optional visual effect color */
-	visual?: string;
-}
-
-/**
- * Power-up visual effects configuration
- */
-export interface PowerUpVisual {
-	/** Base size of power-up */
-	baseSize: number;
-	/** Speed of floating animation */
-	floatSpeed: number;
-	/** Amount of floating movement */
-	floatAmount: number;
-	/** Speed of rotation */
-	rotateSpeed: number;
-	/** Intensity of glow effect */
-	glowAmount: number;
-	/** Number of shimmer particles */
-	shimmerCount: number;
-	/** Speed of shimmer animation */
-	shimmerSpeed: number;
-	/** Size of shimmer particles */
-	shimmerSize: number;
-	/** Number of energy particles */
-	energyCount: number;
-	/** Speed of energy animation */
-	energySpeed: number;
-	/** Size of power-up icon */
-	iconSize: number;
-}
-
-// =========================================
 // Food Configuration
 // =========================================
+
 /**
  * Configuration for food items
  */
@@ -460,7 +467,9 @@ export interface FoodConfig {
 	/** Point values for each food type */
 	points: FoodRates;
 	/** Color settings for each food type */
-	colors: FoodColors;
+	colors: {
+		[key: string]: FoodColorSet;
+	};
 	/** Visual effect settings for food */
 	effects: FoodEffects;
 }
@@ -480,14 +489,26 @@ export interface FoodRates {
 /**
  * Food color settings
  */
-export interface FoodColors {
-	/** Colors for regular food */
-	regular: FoodColorSet;
-	/** Colors for bonus food */
-	bonus: FoodColorSet;
-	/** Colors for golden food */
-	golden: FoodColorSet;
-}
+// export interface FoodColors1 {
+// 	/** Colors for regular food */
+// 	regular: FoodColorSet;
+// 	/** Colors for bonus food */
+// 	bonus: FoodColorSet;
+// 	/** Colors for golden food */
+// 	golden: FoodColorSet;
+// }
+
+/**
+ * Color scheme for food items
+ */
+// export interface FoodColors2 {
+// 	/** Main color of the food item */
+// 	primary: string;
+// 	/** Secondary color for patterns and effects */
+// 	secondary: string;
+// 	/** Highlight color for glow and particles */
+// 	highlight: string;
+// }
 
 /**
  * Food color set
@@ -515,6 +536,29 @@ export interface FoodEffects {
 	outlineWeight: FoodRates;
 	/** Intensity of glow effect */
 	glow: FoodRates;
+}
+
+// =========================================
+// Food Types
+// =========================================
+/**
+ * Type of food that can appear in the game:
+ * - regular: Basic food that increases score and length
+ * - bonus: Special food with higher points and effects
+ * - golden: Rare food with maximum points and special effects
+ */
+export type FoodType = 'regular' | 'bonus' | 'golden';
+
+/**
+ * Color scheme for food items
+ */
+export interface FoodColors {
+	/** Main color of the food item */
+	primary: string;
+	/** Secondary color for patterns and effects */
+	secondary: string;
+	/** Highlight color for glow and particles */
+	highlight: string;
 }
 
 // =========================================
@@ -566,70 +610,8 @@ export interface ScoringConfig {
 }
 
 // =========================================
-// Power-up Badges Configuration
-// =========================================
-/**
- * Configuration for power-up badges
- */
-export interface PowerupBadgesConfig {
-	/** Duration of badge display */
-	duration: number;
-	/** Duration of pop-in animation */
-	popInDuration: number;
-	/** Scale factor for pop-in animation */
-	popInScale: number;
-	/** Spacing between badges */
-	spacing: number;
-	/** Size of badges */
-	size: number;
-	/** Size of floating badges */
-	floatingSize: number;
-	/** Amplitude of hover animation */
-	hoverAmplitude: number;
-	/** Frequency of hover animation */
-	hoverFrequency: number;
-	/** Duration of fade-out animation */
-	fadeOutDuration: number;
-	/** Offset of badges on Y-axis */
-	offsetY: number;
-}
-
-// =========================================
 // Visual Effects Types
 // =========================================
-/**
- * Configuration for particle effects
- */
-export interface ParticleConfig {
-	/** Number of particles */
-	count: number;
-	/** Speed of particles */
-	speed: number;
-	/** Size range of particles */
-	size: {
-		min: number;
-		max: number;
-	};
-	/** Lifetime range of particles */
-	lifetime?: {
-		min: number;
-		max: number;
-	};
-	/** Colors of particles */
-	colors?: string[];
-	/** Color of particles */
-	color?: string;
-	/** Whether particles leave a trail */
-	trail?: boolean;
-	/** Whether particles have a glow effect */
-	glow?: boolean;
-	/** Whether particles sparkle */
-	sparkle?: boolean;
-	/** Whether particles pulse */
-	pulse?: boolean;
-	/** Whether particles have a rainbow effect */
-	rainbow?: boolean;
-}
 
 /**
  * Configuration for trail effects
@@ -670,7 +652,7 @@ export interface EffectConfig {
 	/** Colors of particles */
 	colors: string[];
 	/** Trail configuration */
-	trail?: TrailConfig;
+	trail: TrailConfig;
 	/** Interval between particle emissions */
 	emitInterval?: number;
 }
@@ -689,4 +671,379 @@ export interface EffectsConfig {
 			[key: string]: EffectConfig;
 		};
 	};
+}
+
+// =========================================
+// Consolidated Configuration Types
+// =========================================
+
+// =========================================
+// Snake Configuration Types
+// =========================================
+/**
+ * Configuration for snake segments appearance
+ */
+export interface SnakeSegmentConfig {
+	/** Size of each segment */
+	size: number;
+	/** Space between segments */
+	spacing: number;
+	/** Radius for rounded corners */
+	cornerRadius: number;
+}
+
+// =========================================
+// Power-up Types and Configuration
+// =========================================
+/**
+ * Available power-up types
+ */
+export type PowerUpType = 'speed' | 'ghost' | 'points' | 'slow';
+
+// /**
+//  * Power-ups configuration
+//  */
+// export interface PowerUpsConfig {
+// 	/** Available power-up types */
+// 	types: PowerUpType[];
+// 	/** Chance of power-up spawning */
+// 	spawnChance: number;
+// 	/** Effect settings for each power-up type */
+// 	effects: {
+// 		[key: string]: any;
+// 	};
+// 	/** Color settings for power-ups */
+// 	colors: PowerUpColors;
+// 	/** Visual effect settings */
+// 	visual?: PowerUpVisual;
+// }
+
+/**
+ * Power-up color configuration
+ */
+// export interface PowerUpColors {
+// 	/** Color for points power-up */
+// 	points: string;
+// 	/** Color for slow power-up */
+// 	slow: string;
+// 	/** Color for speed power-up */
+// 	speed: string;
+// 	/** Color for ghost power-up */
+// 	ghost: string;
+// 	/** Optional visual effect color */
+// 	visual?: string;
+// }
+
+// Base configuration for all power-ups
+export interface BasePowerUpConfig {
+	/** Color settings for power-ups */
+	colors: {
+		[key in PowerUpType]: string;
+	};
+
+	types: PowerUpType[];
+}
+
+/**
+ * Configuration for power-up visual effects
+ */
+export interface PowerUpConfig extends BasePowerUpConfig {
+	/** Chance of power-up spawning */
+	spawnChance: number;
+	badges: PowerUpBadgesConfig;
+
+	// /** Effect settings for each power-up type */
+	effects: {
+		speed: {
+			multiplier: number;
+			boost: number;
+			duration: number;
+		};
+		ghost: {
+			multiplier: number;
+			boost: number;
+			duration: number;
+		};
+		points: {
+			multiplier: number;
+			boost: number;
+			duration: number;
+		};
+		slow: {
+			multiplier: number;
+			boost: number;
+			duration: number;
+		};
+	};
+	/** Visual effect settings */
+	visual: PowerUpVisual;
+	icons: {
+		speed: string;
+		ghost: string;
+		points: string;
+		slow: string;
+	};
+}
+
+// export interface PowerUpBadgeConfig extends BasePowerUpConfig {}
+
+/**
+ * Configuration for power-up badges
+ */
+// export interface BadgeConfig {
+// 	size: number;
+// 	duration: number;
+// 	popInDuration: number;
+// 	popInScale: number;
+// 	hoverFrequency: number;
+// 	hoverAmplitude: number;
+// 	spacing: number;
+// 	floatingSize: number;
+// }
+
+// =========================================
+// Power-up Badges Configuration
+// =========================================
+/**
+ * Configuration for power-up badges
+ */
+export interface PowerUpBadgesConfig {
+	/** Duration of badge display */
+	duration: number;
+	/** Duration of pop-in animation */
+	popInDuration: number;
+	/** Scale factor for pop-in animation */
+	popInScale: number;
+	/** Spacing between badges */
+	spacing: number;
+	/** Size of badges */
+	size: number;
+	/** Size of floating badges */
+	floatingSize: number;
+	/** Amplitude of hover animation */
+	hoverAmplitude: number;
+	/** Frequency of hover animation */
+	hoverFrequency: number;
+	/** Duration of fade-out animation */
+	fadeOutDuration: number;
+	/** Offset of badges on Y-axis */
+	offsetY: number;
+}
+
+/**
+ * Power-up visual effects configuration
+ */
+export interface PowerUpVisual {
+	/** Base size of power-up */
+	baseSize: number;
+	/** Speed of floating animation */
+	floatSpeed: number;
+	/** Amount of floating movement */
+	floatAmount: number;
+	/** Speed of rotation */
+	rotateSpeed: number;
+	/** Intensity of glow effect */
+	glowAmount: number;
+	/** Number of shimmer particles */
+	shimmerCount: number;
+	/** Speed of shimmer animation */
+	shimmerSpeed: number;
+	/** Size of shimmer particles */
+	shimmerSize: number;
+	/** Number of energy particles */
+	energyCount: number;
+	/** Speed of energy animation */
+	energySpeed: number;
+	/** Size of power-up icon */
+	iconSize: number;
+}
+
+// =========================================
+// Particle Configuration Types
+// =========================================
+/**
+ * Exhaustive list of possible particle types
+ */
+export type ParticleType =
+	| 'normal' // Standard particle effect
+	| 'score' // Text-based score particle
+	| 'powerup' // Power-up collection particle
+	| 'orbit' // Orbiting particle effect
+	| 'trail' // Particle trail effect
+	| 'active' // Active effect particle
+	| 'sparkle'; // Decorative sparkle particle
+
+/**
+ * Configuration for score-based particles
+ */
+export interface ScoreParticleConfig extends BaseParticleConfig {
+	type: 'score';
+}
+
+/**
+ * Configuration for power-up and orbiting particles
+ */
+export interface PowerUpParticleConfig extends BaseParticleConfig {
+	type: 'powerup' | 'orbit';
+}
+
+/**
+ * Configuration for active effect particles
+ */
+export interface ActiveEffectParticleConfig extends BaseParticleConfig {
+	type: 'active';
+}
+
+/**
+ * Union type of all possible particle configurations
+ */
+export type ParticleConfigType =
+	| BaseParticleConfig
+	| ScoreParticleConfig
+	| PowerUpParticleConfig
+	| ActiveEffectParticleConfig;
+
+/**
+ * Base configuration for all particle types
+ */
+export interface BaseParticleConfig {
+	/** Type of particle */
+	type: ParticleType;
+
+	/** Base speed of the particle */
+	speed: number | { min: number; max: number };
+
+	/** Size range of the particle */
+	size: {
+		min: number;
+		max: number;
+	};
+
+	/** Lifetime range of the particle */
+	lifetime?: {
+		min: number;
+		max: number;
+	};
+
+	/** Color palette for the particle */
+	colors: string[];
+
+	/** Optional trail configuration */
+	trail?: {
+		enabled: boolean;
+		length?: number;
+		decay?: number;
+	};
+
+	/** Visual effect toggles */
+	glow?: boolean;
+	sparkle?: boolean;
+	pulse?: boolean;
+	gravity?: number;
+	rainbow?: boolean;
+
+	// Additional properties to match Particle.ts usage
+	score?: number;
+	text?: string;
+	font?: string;
+	fontSize?: number;
+	initialAngle?: number;
+	spiral?: boolean;
+	orbit?: {
+		enabled: boolean;
+		radius?: number;
+		speed?: number;
+	};
+}
+
+/**
+ * Configuration for particle effects
+ */
+export interface ParticleConfig {
+	/** Number of particles */
+	count: number;
+	/** Speed of particles */
+	speed: number;
+	/** Size range of particles */
+	size: {
+		min: number;
+		max: number;
+	};
+	/** Lifetime range of particles */
+	lifetime?: {
+		min: number;
+		max: number;
+	};
+	/** Colors of particles */
+	colors?: string[];
+	/** Color of particles */
+	color?: string;
+	/** Whether particles leave a trail */
+	trail?: boolean;
+	/** Whether particles have a glow effect */
+	glow?: boolean;
+	/** Whether particles sparkle */
+	sparkle?: boolean;
+	/** Whether particles pulse */
+	pulse?: boolean;
+	/** Whether particles have a rainbow effect */
+	rainbow?: boolean;
+}
+
+/**
+ * Configuration for score-based particles
+ */
+export interface ScoreParticleConfig extends BaseParticleConfig {
+	type: 'score';
+
+	/** Actual score value */
+	score?: number;
+
+	/** Text to display */
+	text?: string;
+
+	/** Font for text particle */
+	font?: string;
+
+	/** Font size for text particle */
+	fontSize?: number;
+}
+
+/**
+ * Configuration for power-up and orbiting particles
+ */
+export interface PowerUpParticleConfig extends BaseParticleConfig {
+	type: 'powerup' | 'orbit';
+
+	/** Orbital motion configuration */
+	orbit?: {
+		enabled: boolean;
+		radius?: number;
+		speed?: number;
+	};
+
+	/** Initial angle of particle emission */
+	initialAngle?: number;
+}
+
+/**
+ * Configuration for active effect particles
+ */
+export interface ActiveEffectParticleConfig extends BaseParticleConfig {
+	type: 'active';
+
+	/** Emission interval for continuous effects */
+	emitInterval?: number;
+
+	/** Spread angle for particle emission */
+	spreadAngle?: number;
+
+	/** Gravity effect on particles */
+	gravity?: number;
+
+	/** Rotation speed of particles */
+	rotationSpeed?: number;
+
+	/** Initial angle of particle emission */
+	initialAngle?: number;
 }

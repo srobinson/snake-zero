@@ -1,6 +1,6 @@
 import type P5 from 'p5';
 import configManager from '../config/gameConfig';
-import type { GameConfig, SnakeConfig, PowerUpType } from '../config/types.consolidated.ts';
+import type { GameConfig, SnakeConfig, PowerUpType } from '../config/types.ts';
 import type { SnakeGame } from '../types';
 import type { Grid } from '../core/Grid';
 import type { Position, Effect, Direction, DrawingContext } from './types';
@@ -31,6 +31,10 @@ export class Snake {
 	private sourcePosition: Position = { x: 0, y: 0 };
 	private targetPosition: Position = { x: 0, y: 0 };
 	private interpolatedSegments: Position[];
+
+	private maxTrailLength = 5; // Number of frames to keep in the trail
+	private trailPositions: Position[][] = [];
+	private ghostTrails: { x: number; y: number; time: number }[] = [];
 
 	constructor(grid: Grid, game: SnakeGame) {
 		this.grid = grid;
@@ -131,10 +135,14 @@ export class Snake {
 		// Handle wrapping in ghost mode
 		const size = this.grid.getSize();
 		if (this.hasEffect('ghost')) {
-			if (head.x < 0) head.x = size.width - 1;
-			if (head.x >= size.width) head.x = 0;
-			if (head.y < 0) head.y = size.height - 1;
-			if (head.y >= size.height) head.y = 0;
+			// Wrap both head segments
+			const segments = [head, this.segments[0]]; // New head and current front head
+			for (const segment of segments) {
+				if (segment.x < 0) segment.x = size.width - 1;
+				if (segment.x >= size.width) segment.x = 0;
+				if (segment.y < 0) segment.y = size.height - 1;
+				if (segment.y >= size.height) segment.y = 0;
+			}
 		}
 
 		// Store current position for interpolation
@@ -148,6 +156,18 @@ export class Snake {
 			this.segments.pop();
 		}
 		this.growing = false;
+
+		// After updating segments
+		if (this.hasEffect('speed')) {
+			// Add current positions to the trail
+			this.trailPositions.push(this.segments.map(segment => ({ ...segment })));
+			if (this.trailPositions.length > this.maxTrailLength) {
+				this.trailPositions.shift();
+			}
+		} else {
+			// Clear trail when speed effect is not active
+			this.trailPositions = [];
+		}
 
 		// Interpolate segments
 		this.interpolateSegments();
@@ -343,95 +363,238 @@ export class Snake {
 	public draw(p5: P5, time: number): void {
 		const cellSize = this.grid.getCellSize();
 
+		// Draw speed trail first (as bottom layer)
+		if (this.hasEffect('speed')) {
+			this.drawSpeedTrail(p5, cellSize);
+		}
+
+		// Draw ghost trail if ghost effect is active
+		if (this.hasEffect('ghost')) {
+			this.drawGhostTrail(p5, cellSize);
+		}
+
 		// Draw body segments (in reverse to layer properly)
-		for (let i = this.interpolatedSegments.length - 1; i >= 2; i--) {
-			this.drawBodySegment(p5, this.interpolatedSegments[i], cellSize);
+		for (let i = this.interpolatedSegments.length - 1; i >= 1; i--) {
+			this.drawBodySegment(p5, this.interpolatedSegments[i], cellSize, i);
 			this.drawSegmentEffects(p5, this.interpolatedSegments[i], i, time, cellSize);
 		}
 
-		// Draw head (both segments)
+		// Draw head
 		this.drawHead(p5, this.interpolatedSegments[0], cellSize);
-		this.drawHead(p5, this.interpolatedSegments[1], cellSize);
-
-		// Draw effects for head segments
 		this.drawSegmentEffects(p5, this.interpolatedSegments[0], 0, time, cellSize);
-		this.drawSegmentEffects(p5, this.interpolatedSegments[1], 1, time, cellSize);
+
+		// Reset any effects
+		this.resetEffects(p5);
 	}
 
-	private drawBodySegment(p5: P5, pos: Position, cellSize: number): void {
-		const segmentConfig = this.snakeConfig.segments;
-		const size = cellSize * segmentConfig.size;
+	private hexToRgb(hex: string): [number, number, number] {
+		// Remove the hash at the start if it exists
+		hex = hex.replace(/^#/, '');
 
+		// Parse the hex values
+		const r = parseInt(hex.slice(0, 2), 16);
+		const g = parseInt(hex.slice(2, 4), 16);
+		const b = parseInt(hex.slice(4, 6), 16);
+
+		return [r, g, b];
+	}
+
+	private drawBodySegment(p5: P5, pos: Position, cellSize: number, index: number = 0): void {
 		p5.push();
+
 		if (this.hasEffect('ghost')) {
-			this.applyGhostEffect(p5);
+			const time = Date.now();
+			const pulseRate = 0.002;
+			const ghostAlpha = 0.6 + 0.2 * Math.sin(time * pulseRate);
+			const spectralColor = this.hexToRgb(this.snakeConfig.effects.ghost.spectralColor);
+
+			// Draw ghost trail
+			this.ghostTrails = this.ghostTrails.filter(trail => time - trail.time < 500);
+			if (Math.random() < 0.3) {
+				// Only store some positions for a more ethereal effect
+				this.ghostTrails.push({ x: pos.x, y: pos.y, time });
+			}
+
+			// Draw trails
+			this.ghostTrails.forEach((trail, index) => {
+				const trailAge = (time - trail.time) / 500;
+				const trailAlpha = (1 - trailAge) * this.snakeConfig.effects.ghost.trailOpacity;
+
+				p5.noStroke();
+				p5.fill(spectralColor[0], spectralColor[1], spectralColor[2], trailAlpha * 255);
+				p5.rect(
+					trail.x * cellSize,
+					trail.y * cellSize,
+					cellSize,
+					cellSize,
+					this.snakeConfig.segments.cornerRadius
+				);
+			});
+
+			// Draw ghost particles
+			const particleCount = this.snakeConfig.effects.ghost.particleCount;
+			const particleSize = this.snakeConfig.effects.ghost.particleSize;
+
+			for (let i = 0; i < particleCount; i++) {
+				const angle = time * 0.005 + (i * Math.PI * 2) / particleCount;
+				const radius = 4 + Math.sin(time * 0.003) * 2;
+				const px = pos.x * cellSize + cellSize / 2 + Math.cos(angle) * radius;
+				const py = pos.y * cellSize + cellSize / 2 + Math.sin(angle) * radius;
+
+				p5.fill(spectralColor[0], spectralColor[1], spectralColor[2], ghostAlpha * 255);
+				p5.ellipse(px, py, particleSize);
+			}
+
+			// Draw main segment with spectral effect
+			p5.noStroke();
+			p5.fill(spectralColor[0], spectralColor[1], spectralColor[2], ghostAlpha * 255);
+		} else {
+			const color = this.hexToRgb(this.snakeConfig.colors.body);
+			const segmentCount = this.segments.length;
+			// Apply diminishing opacity based on segment position
+			const opacity = Math.max(0.4, 1 - (index / segmentCount) * 0.6);
+			p5.fill(color[0], color[1], color[2], opacity * 255);
 		}
 
-		p5.translate(pos.x * cellSize + cellSize / 2, pos.y * cellSize + cellSize / 2);
 		p5.noStroke();
-		p5.fill(this.snakeConfig.colors.body);
-		p5.rect(-size / 2, -size / 2, size, size, segmentConfig.cornerRadius);
-
-		this.resetEffects(p5);
+		p5.rect(
+			pos.x * cellSize,
+			pos.y * cellSize,
+			cellSize,
+			cellSize,
+			this.snakeConfig.segments.cornerRadius
+		);
 		p5.pop();
 	}
 
 	private drawHead(p5: P5, pos: Position, cellSize: number): void {
-		const segmentConfig = this.snakeConfig.segments;
-		const headSize = cellSize * segmentConfig.size;
-		const headLength = cellSize * segmentConfig.size;
-
 		p5.push();
+
 		if (this.hasEffect('ghost')) {
-			this.applyGhostEffect(p5);
+			const time = Date.now();
+			const pulseRate = 0.002;
+			const ghostAlpha = 0.6 + 0.2 * Math.sin(time * pulseRate);
+			const spectralColor = this.hexToRgb(this.snakeConfig.effects.ghost.spectralColor);
+
+			// Draw ghost particles around head
+			const particleCount = this.snakeConfig.effects.ghost.particleCount * 2; // More particles for head
+			const particleSize = this.snakeConfig.effects.ghost.particleSize;
+
+			for (let i = 0; i < particleCount; i++) {
+				const angle = time * 0.005 + (i * Math.PI * 2) / particleCount;
+				const radius = 6 + Math.sin(time * 0.003 + i) * 3;
+				const px = pos.x * cellSize + cellSize / 2 + Math.cos(angle) * radius;
+				const py = pos.y * cellSize + cellSize / 2 + Math.sin(angle) * radius;
+
+				p5.fill(spectralColor[0], spectralColor[1], spectralColor[2], ghostAlpha * 255);
+				p5.ellipse(px, py, particleSize);
+			}
+
+			// Draw main head with spectral effect
+			p5.noStroke();
+			p5.fill(spectralColor[0], spectralColor[1], spectralColor[2], ghostAlpha * 255);
+		} else {
+			const color = this.hexToRgb(this.snakeConfig.colors.head);
+			p5.fill(color[0], color[1], color[2]);
 		}
 
-		p5.translate(pos.x * cellSize + cellSize / 2, pos.y * cellSize + cellSize / 2);
-
-		// Rotate based on direction
-		let rotation = 0;
-		switch (this.direction) {
-			case 'up':
-				rotation = -Math.PI / 2;
-				break;
-			case 'down':
-				rotation = Math.PI / 2;
-				break;
-			case 'left':
-				rotation = Math.PI;
-				break;
-			case 'right':
-				rotation = 0;
-				break;
-		}
-		p5.rotate(rotation);
-
-		// Draw head shape
+		// Draw the head
 		p5.noStroke();
-		p5.fill(this.snakeConfig.colors.head);
-		p5.rect(-headSize / 2, -headSize / 2, headLength, headSize, segmentConfig.cornerRadius);
+		p5.rect(
+			pos.x * cellSize,
+			pos.y * cellSize,
+			cellSize,
+			cellSize,
+			this.snakeConfig.segments.cornerRadius
+		);
 
-		// Draw eyes
-		this.drawEyes(p5, 0, 0, headSize, headLength);
+		// Draw eyes with adjusted alpha for ghost effect
+		const eyeAlpha = this.hasEffect('ghost') ? 0.85 : 1.0;
+		this.drawEyes(p5, pos.x * cellSize, pos.y * cellSize, cellSize, cellSize, eyeAlpha);
 
-		this.resetEffects(p5);
 		p5.pop();
 	}
 
-	private drawEyes(p5: P5, x: number, y: number, headWidth: number, headLength: number): void {
-		const eyeSize = headWidth * 0.2;
-		const pupilSize = eyeSize * 0.5;
-		const eyeOffset = headWidth * 0.2;
+	private drawEyes(
+		p5: P5,
+		x: number,
+		y: number,
+		headWidth: number,
+		headLength: number,
+		alpha: number = 1.0
+	): void {
+		const eyeColor = this.hexToRgb(this.snakeConfig.colors.eyes);
+		const pupilColor = this.hexToRgb(this.snakeConfig.colors.pupil);
+		const eyeSize = this.snakeConfig.segments.eyeSize;
+		const pupilSize = this.snakeConfig.segments.pupilSize || eyeSize * 0.5;
+		const direction = this.direction;
 
-		// Draw eye whites
-		p5.fill(255);
-		p5.ellipse(x + headLength * 0.3, y - eyeOffset, eyeSize);
-		p5.ellipse(x + headLength * 0.3, y + eyeOffset, eyeSize);
+		// Base positions for eyes (centered in the head)
+		const centerX = x + headWidth / 2;
+		const centerY = y + headLength / 2;
+		const eyeSpacing = headWidth * 0.25;
 
-		// Draw pupils
-		p5.fill(0);
-		p5.ellipse(x + headLength * 0.35, y - eyeOffset, pupilSize);
-		p5.ellipse(x + headLength * 0.35, y + eyeOffset, pupilSize);
+		// Calculate eye positions based on direction
+		let leftEyeX = centerX - eyeSpacing;
+		let rightEyeX = centerX + eyeSpacing;
+		let leftEyeY = centerY;
+		let rightEyeY = centerY;
+
+		// Adjust eye positions based on direction
+		switch (direction) {
+			case 'up':
+				leftEyeY = centerY - headLength * 0.15;
+				rightEyeY = centerY - headLength * 0.15;
+				break;
+			case 'down':
+				leftEyeY = centerY + headLength * 0.15;
+				rightEyeY = centerY + headLength * 0.15;
+				break;
+			case 'left':
+				leftEyeX = centerX - headWidth * 0.15;
+				rightEyeX = centerX - headWidth * 0.15;
+				leftEyeY = centerY - eyeSpacing;
+				rightEyeY = centerY + eyeSpacing;
+				break;
+			case 'right':
+				leftEyeX = centerX + headWidth * 0.15;
+				rightEyeX = centerX + headWidth * 0.15;
+				leftEyeY = centerY - eyeSpacing;
+				rightEyeY = centerY + eyeSpacing;
+				break;
+		}
+
+		// Draw eyes
+		p5.fill(eyeColor[0], eyeColor[1], eyeColor[2], alpha * 255);
+		p5.noStroke();
+		p5.ellipse(leftEyeX, leftEyeY, eyeSize);
+		p5.ellipse(rightEyeX, rightEyeY, eyeSize);
+
+		if (pupilSize > 0) {
+			// Draw pupils with offset based on direction
+			p5.fill(pupilColor[0], pupilColor[1], pupilColor[2], alpha * 255);
+			let pupilOffsetX = 0;
+			let pupilOffsetY = 0;
+			const pupilOffset = eyeSize * 0.2;
+
+			switch (direction) {
+				case 'up':
+					pupilOffsetY = -pupilOffset;
+					break;
+				case 'down':
+					pupilOffsetY = pupilOffset;
+					break;
+				case 'left':
+					pupilOffsetX = -pupilOffset;
+					break;
+				case 'right':
+					pupilOffsetX = pupilOffset;
+					break;
+			}
+
+			p5.ellipse(leftEyeX + pupilOffsetX, leftEyeY + pupilOffsetY, pupilSize);
+			p5.ellipse(rightEyeX + pupilOffsetX, rightEyeY + pupilOffsetY, pupilSize);
+		}
 	}
 
 	private drawSegmentEffects(
@@ -444,15 +607,56 @@ export class Snake {
 		p5.push();
 		p5.translate(pos.x * cellSize + cellSize / 2, pos.y * cellSize + cellSize / 2);
 
-		// Draw speed effect
-		if (this.hasEffect('speed')) {
+		// Draw points effect
+		if (this.hasEffect('points')) {
 			const phase = (time / 500 + index * 0.2) % 1;
-			const size = cellSize * (0.5 + 0.2 * Math.sin(phase * Math.PI * 2));
+			const baseSize = cellSize * (0.8 + 0.3 * Math.sin(phase * Math.PI * 2));
+			
+			// Adjust size based on speed effect
+			const size = this.hasEffect('speed') 
+				? baseSize * Math.max(0.4, 1 - (index * 0.05)) // More gradual size decrease
+				: baseSize;
 
+			// Determine star colors based on ghost effect
+			let outerColor, innerColor;
+			if (this.hasEffect('ghost')) {
+				// Brighter blue colors with higher opacity for better visibility
+				const segmentCount = this.segments.length;
+				const opacityFactor = Math.max(0.6, 1 - (index / segmentCount) * 0.4);
+				outerColor = [60, 100, 255, 220 * opacityFactor]; // Brighter blue
+				innerColor = [100, 150, 255, 250 * opacityFactor]; // Even brighter blue
+			} else {
+				outerColor = [255, 215, 0, 150]; // Golden color
+				innerColor = [255, 255, 0, 200]; // Brighter yellow
+			}
+
+			// Outer glow
 			p5.noFill();
-			p5.stroke(255, 255, 0, 100);
-			p5.strokeWeight(2);
+			p5.stroke(...outerColor);
+			p5.strokeWeight(6);
 			this.drawStar(p5, 0, 0, size * 0.4, size * 0.8, 5);
+
+			// Inner star
+			p5.stroke(...innerColor);
+			p5.strokeWeight(3);
+			this.drawStar(p5, 0, 0, size * 0.3, size * 0.7, 5);
+
+			// Add extra stars for speed effect
+			if (this.hasEffect('speed')) {
+				const trailPhase = (time / 400 + index * 0.3) % 1;
+				const trailSize = size * 0.6;
+				const orbitRadius = cellSize * 0.3 * (1 + Math.sin(trailPhase * Math.PI));
+				
+				p5.stroke(...outerColor.map((c, i) => i === 3 ? c * 0.7 : c));
+				p5.strokeWeight(2);
+				this.drawStar(p5, 
+					Math.cos(trailPhase * Math.PI * 2) * orbitRadius,
+					Math.sin(trailPhase * Math.PI * 2) * orbitRadius,
+					trailSize * 0.2,
+					trailSize * 0.4,
+					5
+				);
+			}
 		}
 
 		p5.pop();
@@ -481,8 +685,70 @@ export class Snake {
 		p5.endShape(p5.CLOSE);
 	}
 
+	private drawSpeedTrail(p5: P5, cellSize: number): void {
+		for (let i = 0; i < this.trailPositions.length; i++) {
+			const alpha = ((i + 1) / this.trailPositions.length) * this.snakeConfig.effects.speed.lineOpacity;
+			p5.push();
+			p5.noStroke();
+			
+			const segments = this.trailPositions[i];
+			const trailColor = [255, 50, 50]; // Red color for speed trail
+
+			for (let j = 0; j < segments.length; j++) {
+				const segment = segments[j];
+				const segmentProgress = j / segments.length;
+				const segmentAlpha = alpha * (1 - segmentProgress * 0.5); // Fade out towards tail
+				
+				p5.fill(trailColor[0], trailColor[1], trailColor[2], segmentAlpha * 255);
+				
+				// Draw the segment with a slight stretch effect
+				const stretchX = cellSize * 1.1;
+				const stretchY = cellSize * 1.1;
+				
+				p5.rect(
+					segment.x * cellSize - (stretchX - cellSize) / 2,
+					segment.y * cellSize - (stretchY - cellSize) / 2,
+					stretchX,
+					stretchY,
+					this.snakeConfig.segments.cornerRadius
+				);
+			}
+			p5.pop();
+		}
+	}
+
+	private drawGhostTrail(p5: P5, cellSize: number): void {
+		const time = Date.now();
+		const pulseRate = 0.002;
+
+		// Draw a subtle ethereal trail
+		for (let i = 2; i < this.interpolatedSegments.length; i++) {
+			const segment = this.interpolatedSegments[i];
+			const ghostAlpha =
+				(0.3 + 0.1 * Math.sin(time * pulseRate + i * 0.2)) *
+				(1 - i / this.interpolatedSegments.length); // Fade out based on distance from head
+
+			p5.push();
+			p5.noStroke();
+			p5.fill(200, 200, 255, ghostAlpha * 100);
+			p5.rect(
+				segment.x * cellSize,
+				segment.y * cellSize,
+				cellSize,
+				cellSize,
+				this.snakeConfig.segments.cornerRadius
+			);
+			p5.pop();
+		}
+	}
+
 	private applyGhostEffect(p5: P5): void {
-		(p5.drawingContext as DrawingContext).globalAlpha = 0.5;
+		if (this.hasEffect('speed')) {
+			// More visible ghost effect when speed is active
+			(p5.drawingContext as DrawingContext).globalAlpha = 0.7;
+		} else {
+			(p5.drawingContext as DrawingContext).globalAlpha = 0.5;
+		}
 	}
 
 	private resetEffects(p5: P5): void {

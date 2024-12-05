@@ -1,25 +1,32 @@
-import { BaseParticleConfig } from './types.consolidated';
+import type { ActiveEffectParticleConfig, BaseParticleConfig, ScoreParticleConfig } from './types';
 
 /**
- * Validate particle configuration
+ * Validate a particle configuration
  * @param config - Particle configuration to validate
- * @returns Boolean indicating if the configuration is valid
+ * @returns Boolean indicating if configuration is valid
  */
 export function validateParticleConfig(config: BaseParticleConfig): boolean {
 	// Basic validation rules
 	const baseValidation =
-		(typeof config.speed === 'number' ? config.speed > 0 : config.speed.min > 0) &&
+		(typeof config.speed === 'number' ? config.speed : config.speed.min) > 0 &&
 		config.size.min >= 0 &&
 		config.size.max > config.size.min &&
 		config.colors.length > 0;
 
-	// Type-specific validations can be added here if needed
+	// Type-specific validations
 	switch (config.type) {
 		case 'score':
+			return baseValidation && (config as ScoreParticleConfig).fontSize !== undefined;
+
 		case 'powerup':
 		case 'orbit':
-		case 'active':
+			// For powerup and orbit, we'll just check basic validation
 			return baseValidation;
+
+		case 'active':
+			return (
+				baseValidation && (config as ActiveEffectParticleConfig).emitInterval !== undefined
+			);
 
 		default:
 			return baseValidation;

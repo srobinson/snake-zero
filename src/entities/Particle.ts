@@ -1,5 +1,5 @@
 import p5 from 'p5';
-import { ParticleConfigType, ParticleType } from '../config/types.consolidated';
+import { ParticleConfigType, ParticleType } from '../config/types';
 import { TrailPoint } from '../core/types';
 
 export class Particle {

@@ -14,7 +14,7 @@ import { PowerUp } from './entities/PowerUp';
 import { PowerUpBadge } from './entities/PowerUpBadge';
 
 // import { GameConfig } from './config/gameConfig';
-import { GameConfig, GameEvents, PowerUpType, Position } from './config/types.consolidated';
+import { GameConfig, GameEvents, PowerUpType, Position } from './config/types';
 import { SnakeGame } from './types';
 
 export default class Game implements SnakeGame {
@@ -458,7 +458,13 @@ export default class Game implements SnakeGame {
 	applyPowerUp(type: PowerUpType, powerUpPosition: Position): void {
 		// Get powerup duration from config
 		// const duration = this.config.powerUps.effects[type].duration;
-		this.addPowerUpBadge(type, powerUpPosition);
+
+		if (this.activePowerUps.has(type)) {
+			const badge = this.activePowerUps.get(type);
+			badge!.resetStartTime();
+		} else {
+			this.addPowerUpBadge(type, powerUpPosition);
+		}
 
 		// Create pop-in particle effect at snake's head
 		const position = this.snake.segments[0];
@@ -491,6 +497,8 @@ export default class Game implements SnakeGame {
 		const effectDuration = this.config.powerUps.effects[type].duration;
 		const remainingDuration = this.snake.getEffectTimeRemaining(type);
 
+		const letPosX = margin + badgeCount * (badgeSize + badgeSpacing);
+
 		const uiBadge = new PowerUpBadge(
 			this.p5!,
 			type,
@@ -511,7 +519,7 @@ export default class Game implements SnakeGame {
 					hoverFrequency: config?.hoverFrequency || 2, // Add default value
 				},
 			},
-			margin + badgeCount * (badgeSize + badgeSpacing),
+			letPosX,
 			margin,
 			false // isFloating = false
 		);

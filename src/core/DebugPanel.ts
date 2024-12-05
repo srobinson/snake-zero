@@ -1,7 +1,7 @@
 import configManager from '../config/gameConfig';
 import { PowerUp } from '../entities/PowerUp';
 import { SnakeGame } from '../types';
-import { BoardPreset } from '../config/types.consolidated';
+import { BoardPreset } from '../config/types';
 
 type DebugConfig = {
 	enabled: boolean;

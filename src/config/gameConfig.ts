@@ -1,6 +1,6 @@
 import { deepMerge } from './configValidator';
 import { applyDataAttributes } from './dataAttributeParser';
-import { GameConfig, GameData } from './types.consolidated';
+import { GameConfig, GameData } from './types';
 
 // Add BoardConfig type
 export type BoardConfig = 'small' | 'medium' | 'large' | 'fullscreen';
@@ -117,7 +117,12 @@ export const defaultConfig: GameConfig = {
 			ghost: {
 				opacity: 0.7,
 				glowRadius: 15,
-				glowColor: 'cyan',
+				glowColor: '#4FC3F7', // Light blue color
+				trailLength: 3, // Number of afterimages
+				trailOpacity: 0.3, // Opacity of afterimages
+				particleCount: 2, // Particles per segment
+				particleSize: 3, // Size of ghost particles
+				spectralColor: '#81D4FA', // Lighter blue for the spectral effect
 			},
 			points: {
 				sparkleChance: 0.2,
@@ -131,14 +136,14 @@ export const defaultConfig: GameConfig = {
 			},
 		},
 		colors: {
-			head: '#4CAF50',
-			body: '#2E7D32',
-			highlight: '#A5D6A7',
-			shadow: '#1B5E20',
-			glow: 'rgba(76, 175, 80, 0.2)',
-			eyes: '#FFFFFF',
-			pupil: '#000000',
-			tongue: '#FF0000',
+			head: '#4CAF50', // Green color for the snake
+			body: '#4CAF50', // Green color for the snake
+			highlight: '#81C784', // Lighter green for highlights
+			shadow: '#388E3C', // Darker green for shadows
+			glow: 'rgba(76, 175, 80, 0.2)', // Green glow
+			eyes: '#FFFFFF', // White eyes
+			pupil: '#000000', // Black pupils
+			tongue: '#FF0000', // Red tongue
 		},
 		controls: {
 			up: ['ArrowUp', 'w'],
@@ -173,22 +178,22 @@ export const defaultConfig: GameConfig = {
 			speed: {
 				multiplier: 1.0,
 				boost: 1.5,
-				duration: 5000, // 5 seconds in milliseconds
+				duration: 15000, // 5 seconds in milliseconds
 			},
 			ghost: {
 				multiplier: 1.0,
 				boost: 1,
-				duration: 8000, // 8 seconds in milliseconds
+				duration: 18000, // 8 seconds in milliseconds
 			},
 			points: {
 				multiplier: 1.0,
 				boost: 2,
-				duration: 10000, // 10 seconds in milliseconds
+				duration: 110000, // 10 seconds in milliseconds
 			},
 			slow: {
 				multiplier: 0.8,
 				boost: 1.5,
-				duration: 5000, // 5 seconds in milliseconds
+				duration: 15000, // 5 seconds in milliseconds
 			},
 		},
 		colors: {
@@ -354,7 +359,9 @@ class ConfigManager {
 	}
 
 	public reset(): void {
-		this.config = JSON.parse(JSON.stringify(this.sources.default));
+		localStorage.removeItem('gameConfig');
+		this.loadDefaultConfig();
+		this.mergeConfigurations();
 	}
 
 	public savePersistentSettings(configChanges: Partial<GameConfig>): void {

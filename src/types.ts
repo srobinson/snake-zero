@@ -1,4 +1,4 @@
-import type { GameConfig } from './config/types.consolidated';
+import type { GameConfig } from './config/types';
 import type { Snake } from './entities/Snake';
 import type { Grid } from './core/Grid';
 import type { Food } from './entities/Food';

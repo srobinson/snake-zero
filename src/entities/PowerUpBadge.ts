@@ -1,5 +1,5 @@
 import p5 from 'p5';
-import type { PowerUpConfig } from '../config/types.consolidated';
+import type { PowerUpConfig } from '../config/types';
 
 type PowerUpType = 'speed' | 'ghost' | 'points' | 'slow';
 
@@ -23,6 +23,10 @@ export class PowerUpBadge {
 	private baseScale: number;
 	private currentScale: number;
 	private badges: Record<PowerUpType, Badge>;
+
+	resetStartTime(): void {
+		this.startTime = Date.now();
+	}
 
 	constructor(
 		p5: p5,
@@ -66,20 +70,30 @@ export class PowerUpBadge {
 
 	update(): boolean {
 		const elapsed = Date.now() - this.startTime;
-		const remaining = this.config.badges.duration - elapsed; // Duration is already in milliseconds
+		const remaining = this.config.badges.duration - elapsed;
 
 		// Pop-in animation
 		if (elapsed < this.config.badges.popInDuration) {
 			const progress = elapsed / this.config.badges.popInDuration;
 			this.scale = this.p5.lerp(0, this.baseScale, this.easeOutBack(progress));
 		} else {
-			// Throb animation for floating badges
-			if (this.isFloating) {
+			// Subtle motion for non-floating badges
+			if (!this.isFloating) {
+				// Gentle vertical bounce
+				const bounceSpeed = 0.004;
+				const bounceAmount = this.size * 0.05;
+				const verticalOffset = Math.sin(elapsed * bounceSpeed) * bounceAmount;
+				this.y = this.baseY + verticalOffset;
+
+				// Subtle scale variation
+				const scaleVariation = 0.05;
+				this.scale = this.baseScale + Math.sin(elapsed * 0.003) * scaleVariation;
+			}
+			// Existing floating badge animation
+			else {
 				const throbSpeed = 0.006;
 				const throbAmount = 0.15;
 				this.scale = this.baseScale + Math.sin(elapsed * throbSpeed) * throbAmount;
-			} else {
-				this.scale = this.baseScale;
 			}
 		}
 
@@ -110,24 +124,34 @@ export class PowerUpBadge {
 		p5.translate(this.x, this.y);
 		p5.scale(this.scale);
 
-		// Draw badge background with glow
-		p5.drawingContext.shadowBlur = 20;
-		p5.drawingContext.shadowColor = badge.color;
+		// Pulsing glow effect for non-floating badges
+		if (!this.isFloating) {
+			const glowIntensity = Math.sin(elapsed * 0.005) * 10 + 10;
+			p5.drawingContext.shadowBlur = glowIntensity;
+			p5.drawingContext.shadowColor = badge.color;
+		} else {
+			p5.drawingContext.shadowBlur = 20;
+			p5.drawingContext.shadowColor = badge.color;
+		}
+
 		p5.noStroke();
 		p5.fill(badge.color + this.hex(Math.floor(this.alpha)));
 		p5.circle(0, 0, this.size);
 		p5.drawingContext.shadowBlur = 0;
 
-		// Draw progress ring (only for UI badges)
+		// Improved progress ring animation for UI badges
 		if (!this.isFloating) {
 			p5.noFill();
-			p5.stroke(255, this.alpha);
+			p5.stroke(255, this.alpha * 0.7);
 			p5.strokeWeight(3);
+
+			// Animated progress ring with slight pulsing
+			const pulseOffset = Math.sin(elapsed * 0.01) * 2;
 			p5.arc(
 				0,
 				0,
-				this.size + 5,
-				this.size + 5,
+				this.size + 5 + pulseOffset,
+				this.size + 5 + pulseOffset,
 				-p5.HALF_PI,
 				-p5.HALF_PI + p5.TWO_PI * progress
 			);

@@ -1,6 +1,6 @@
 import type P5 from 'p5';
 import configManager from '../config/gameConfig';
-import type { FoodConfig, FoodType, FoodColors } from '../config/types.consolidated.ts';
+import type { FoodConfig, FoodType, FoodColors } from '../config/types.ts';
 import type { SnakeGame } from '../types';
 import type { Position, Obstacle, Grid } from './types';
 

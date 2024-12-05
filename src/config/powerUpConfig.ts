@@ -1,4 +1,4 @@
-// import { PowerUpConfig } from './types.consolidated';
+// import { PowerUpConfig } from './types';
 // import { defaultConfig as gameConfig } from './gameConfig';
 /**
  * Configuration for power-up visual effects

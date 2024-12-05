@@ -26,6 +26,12 @@ export class Snake {
 	private nextDirection: Direction;
 	private snakeConfig: SnakeConfig;
 
+	// New interpolation properties with definite initialization
+	private interpolationProgress: number = 0;
+	private sourcePosition: Position = { x: 0, y: 0 };
+	private targetPosition: Position = { x: 0, y: 0 };
+	private interpolatedSegments: Position[];
+
 	constructor(grid: Grid, game: SnakeGame) {
 		this.grid = grid;
 		this.game = game;
@@ -45,6 +51,9 @@ export class Snake {
 
 		// Initialize snake segments
 		this.reset();
+
+		// Initialize interpolated segments
+		this.interpolatedSegments = [...this.segments];
 	}
 
 	public reset(): void {
@@ -91,6 +100,11 @@ export class Snake {
 
 		const elapsed = currentTime - this.lastMoveTime;
 		if (elapsed < this.getMoveDelay()) {
+			// Continue interpolation even when not moving
+			if (this.interpolationProgress < 1) {
+				this.interpolationProgress += 0.2;
+				this.interpolateSegments();
+			}
 			return false;
 		}
 
@@ -123,12 +137,20 @@ export class Snake {
 			if (head.y >= size.height) head.y = 0;
 		}
 
+		// Store current position for interpolation
+		this.sourcePosition = { ...this.segments[0] };
+		this.targetPosition = head;
+		this.interpolationProgress = 0;
+
 		// Update segments
 		this.segments.unshift(head);
 		if (!this.growing) {
 			this.segments.pop();
 		}
 		this.growing = false;
+
+		// Interpolate segments
+		this.interpolateSegments();
 
 		// Update move timing
 		this.lastMoveTime = currentTime;
@@ -322,18 +344,18 @@ export class Snake {
 		const cellSize = this.grid.getCellSize();
 
 		// Draw body segments (in reverse to layer properly)
-		for (let i = this.segments.length - 1; i >= 2; i--) {
-			this.drawBodySegment(p5, this.segments[i], cellSize);
-			this.drawSegmentEffects(p5, this.segments[i], i, time, cellSize);
+		for (let i = this.interpolatedSegments.length - 1; i >= 2; i--) {
+			this.drawBodySegment(p5, this.interpolatedSegments[i], cellSize);
+			this.drawSegmentEffects(p5, this.interpolatedSegments[i], i, time, cellSize);
 		}
 
 		// Draw head (both segments)
-		this.drawHead(p5, this.segments[0], cellSize);
-		this.drawHead(p5, this.segments[1], cellSize);
+		this.drawHead(p5, this.interpolatedSegments[0], cellSize);
+		this.drawHead(p5, this.interpolatedSegments[1], cellSize);
 
 		// Draw effects for head segments
-		this.drawSegmentEffects(p5, this.segments[0], 0, time, cellSize);
-		this.drawSegmentEffects(p5, this.segments[1], 1, time, cellSize);
+		this.drawSegmentEffects(p5, this.interpolatedSegments[0], 0, time, cellSize);
+		this.drawSegmentEffects(p5, this.interpolatedSegments[1], 1, time, cellSize);
 	}
 
 	private drawBodySegment(p5: P5, pos: Position, cellSize: number): void {
@@ -487,5 +509,34 @@ export class Snake {
 
 	public getDirection(): Direction {
 		return this.direction;
+	}
+
+	// New method for interpolating segments
+	private interpolateSegments(): void {
+		// Only interpolate if we have a source and target
+		if (!this.sourcePosition || !this.targetPosition) return;
+
+		// Create a copy of segments for interpolation
+		this.interpolatedSegments = this.segments.map((segment, index) => {
+			if (index === 0) {
+				// Interpolate head position
+				return {
+					x:
+						this.sourcePosition.x +
+						(this.targetPosition.x - this.sourcePosition.x) *
+							this.easeInOutQuad(this.interpolationProgress),
+					y:
+						this.sourcePosition.y +
+						(this.targetPosition.y - this.sourcePosition.y) *
+							this.easeInOutQuad(this.interpolationProgress),
+				};
+			}
+			return segment;
+		});
+	}
+
+	// Easing function for smoother interpolation
+	private easeInOutQuad(t: number): number {
+		return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
 	}
 }

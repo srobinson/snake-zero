@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Reset Snake Game Configuration</title>
+    <script>
+        function resetConfig() {
+            localStorage.removeItem('gameConfig');
+            window.location.href = 'index.html';
+        }
+    </script>
+</head>
+<body>
+    <button onclick="resetConfig()">Reset Configuration</button>
+</body>
+</html>

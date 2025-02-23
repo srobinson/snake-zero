@@ -1,4 +1,4 @@
-import { GameEvent, EventData, EventCallback } from '../config/types.consolidated';
+import { GameEvent, EventData, EventCallback } from '../config/types';
 
 /**
  * Simple event system for game events.

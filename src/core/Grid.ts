@@ -1,4 +1,4 @@
-import type { GameConfig, GridInterface, GridSize, Position } from '../config/types.consolidated';
+import type { GameConfig, GridInterface, GridSize, Position } from '../config/types';
 
 /**
  * Represents the game grid that manages the game board dimensions, cell sizes,

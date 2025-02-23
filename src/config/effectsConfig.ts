@@ -1,5 +1,5 @@
 import configManager from './gameConfig';
-import { EffectsConfig } from './types.consolidated';
+import { EffectsConfig } from './types';
 
 // Helper function to create lighter hue of a color
 function lightenColor(hex: string, percent: number): string {

@@ -1,0 +1,1262 @@
+
+# 2024-12-05 17:22:37.160422
++Y
+
+# 2024-12-05 17:23:11.134925
++N
+
+# 2024-12-05 17:23:32.357459
++Hello please identity
+
+# 2024-12-05 17:25:24.075399
++/d
+
+# 2024-12-05 17:25:51.485921
++Hello
+
+# 2024-12-05 17:29:39.674194
++Please code read my project
+
+# 2024-12-05 17:31:11.153322
++can you find  /Users/alphab/Dev/snaked-again/src/entities/Snake.ts
+
+# 2024-12-05 17:31:43.575076
++how to dad?
+
+# 2024-12-05 17:31:47.915849
++how to add?
+
+# 2024-12-05 17:35:31.245303
++are you any good with p5js?
+
+# 2024-12-05 17:36:34.295527
++Hello
+
+# 2024-12-05 17:37:00.511395
++I want helkp/inspiration with some p5js effects
+
+# 2024-12-05 17:41:30.574977
++I want to created an effect for speed. It is a snake game and I want to add an effect to the snake when speed poer up is consumend.. you can look at the points effect for exampl in the code below.. i do not want you to refactor... Bear in mind that multiple effect can be applied to the snanke at any time so the effects need to be cool independantly but also cohesive uf all active at the same time.. The speed effect I really like, the ghost effect is really bland and needs improving.. we do not have an effect for speed yet I was thinking of making the snake leaving a fire prticle effect in it's wake that would be cool however we have to bear in mind the when the snake is long it needs to look good also so any ideas you have
+
+# 2024-12-05 17:41:37.478620
++import type P5 from 'p5';
++import configManager from '../config/gameConfig';
++import type { GameConfig, SnakeConfig, PowerUpType } from '../config/types.ts';
++import type { SnakeGame } from '../types';
++import type { Grid } from '../core/Grid';
++import type { Position, Effect, Direction, DrawingContext } from './types';
++import { Food } from '../entities/Food';
++
++/**
++ * Snake class representing the player-controlled snake in the game.
++ */
++export class Snake {
++	public readonly effects: Map<PowerUpType, Effect[]>;
++	public readonly segments: Position[];
++	public foodEaten: number;
++	public score: number;
++
++	private readonly grid: Grid;
++	private readonly game: SnakeGame;
++	private readonly config: GameConfig;
++	private baseSpeed: number;
++	private direction: Direction;
++	private growing: boolean;
++	private lastMoveTime: number;
++	private moveInterval: number = 0;
++	private nextDirection: Direction;
++	private snakeConfig: SnakeConfig;
++
++	// New interpolation properties with definite initialization
++	private interpolationProgress: number = 0;
++	private sourcePosition: Position = { x: 0, y: 0 };
++	private targetPosition: Position = { x: 0, y: 0 };
++	private interpolatedSegments: Position[];
++
++	constructor(grid: Grid, game: SnakeGame) {
++		this.grid = grid;
++		this.game = game;
++		this.config = configManager.getConfig();
++		this.effects = new Map();
++
++		// Initialize base properties
++		this.segments = [];
++		this.direction = (this.config.snake.initialDirection as Direction) || 'right';
++		this.nextDirection = this.direction;
++		this.lastMoveTime = 0;
++		this.score = 0;
++		this.growing = false;
++		this.foodEaten = 0;
++		this.baseSpeed = this.config.difficulty.presets[this.config.difficulty.current].baseSpeed;
++		this.snakeConfig = this.config.snake;
++
++		// Initialize snake segments
++		this.reset();
++
++		// Initialize interpolated segments
++		this.interpolatedSegments = [...this.segments];
++	}
++
++	public reset(): void {
++		const gridSize = this.grid.getSize();
++
++		// Calculate center position
++		const centerX = Math.floor(gridSize.width / 2);
++		const centerY = Math.floor(gridSize.height / 2);
++
++		// Clear segments array
++		this.segments.length = 0;
++
++		// Add head segments (always 2 cells)
++		this.segments.push(
++			{ x: centerX, y: centerY }, // Front of head
++			{ x: centerX - 1, y: centerY } // Back of head
++		);
++
++		// Add initial body segments based on config
++		for (let i = 0; i < this.snakeConfig.initialLength - 2; i++) {
++			this.segments.push({ x: centerX - (i + 2), y: centerY });
++		}
++
++		// Reset properties
++		this.direction = (this.snakeConfig.initialDirection as Direction) || 'right';
++		this.nextDirection = this.direction;
++		this.lastMoveTime = 0;
++		this.score = 0;
++		this.growing = false;
++		this.foodEaten = 0;
++		this.effects.clear();
++		this.baseSpeed = this.config.difficulty.presets[this.config.difficulty.current].baseSpeed;
++	}
++
++	public update(currentTime: number): boolean {
++		// Update effects first
++		this.updateEffects();
++
++		// Check if it's time to move
++		if (!this.lastMoveTime) {
++			this.lastMoveTime = currentTime;
++			return false;
++		}
++
++		const elapsed = currentTime - this.lastMoveTime;
++		if (elapsed < this.getMoveDelay()) {
++			// Continue interpolation even when not moving
++			if (this.interpolationProgress < 1) {
++				this.interpolationProgress += 0.2;
++				this.interpolateSegments();
++			}
++			return false;
++		}
++
++		// Update direction and move
++		this.direction = this.nextDirection;
++		const head: Position = { ...this.segments[0] };
++
++		// Calculate new head position
++		switch (this.direction) {
++			case 'up':
++				head.y--;
++				break;
++			case 'down':
++				head.y++;
++				break;
++			case 'left':
++				head.x--;
++				break;
++			case 'right':
++				head.x++;
++				break;
++		}
++
++		// Handle wrapping in ghost mode
++		const size = this.grid.getSize();
++		if (this.hasEffect('ghost')) {
++			if (head.x < 0) head.x = size.width - 1;
++			if (head.x >= size.width) head.x = 0;
++			if (head.y < 0) head.y = size.height - 1;
++			if (head.y >= size.height) head.y = 0;
++		}
++
++		// Store current position for interpolation
++		this.sourcePosition = { ...this.segments[0] };
++		this.targetPosition = head;
++		this.interpolationProgress = 0;
++
++		// Update segments
++		this.segments.unshift(head);
++		if (!this.growing) {
++			this.segments.pop();
++		}
++		this.growing = false;
++
++		// Interpolate segments
++		this.interpolateSegments();
++
++		// Update move timing
++		this.lastMoveTime = currentTime;
++		this.moveInterval = 1000 / this.getCurrentSpeed();
++
++		return true;
++	}
++
++	public setDirection(newDirection: Direction): void {
++		// Prevent 180-degree turns
++		const opposites: Record<Direction, Direction> = {
++			up: 'down',
++			down: 'up',
++			left: 'right',
++			right: 'left',
++		};
++
++		if (this.direction !== opposites[newDirection]) {
++			this.nextDirection = newDirection;
++		}
++	}
++
++	public grow(): void {
++		this.growing = true;
++		this.foodEaten = (this.foodEaten || 0) + 1;
++		this.score += Math.round(10 * this.getPointsMultiplier());
++
++		if (this.snakeConfig.speedProgression.enabled) {
++			// Get current difficulty base speed
++			const difficultyBaseSpeed =
++				this.config.difficulty.presets[this.config.difficulty.current].baseSpeed;
++
++			// Calculate speed increase
++			const speedIncrease =
++				this.foodEaten * this.snakeConfig.speedProgression.increasePerFood;
++
++			// Apply speed increase with maximum cap
++			this.baseSpeed = Math.min(
++				difficultyBaseSpeed + speedIncrease,
++				this.snakeConfig.speedProgression.maxSpeed
++			);
++		}
++	}
++
++	private updateEffects(): void {
++		const currentTime = Date.now();
++
++		// Check each effect type
++		for (const [type, effects] of this.effects.entries()) {
++			// Remove expired effects
++			const activeEffects = effects.filter(
++				effect => currentTime - effect.startTime < effect.duration
++			);
++
++			if (activeEffects.length > 0) {
++				this.effects.set(type, activeEffects);
++			} else {
++				this.effects.delete(type);
++			}
++		}
++	}
++
++	public hasEffect(type: PowerUpType): boolean {
++		return this.effects.has(type) && this.effects.get(type)!.length > 0;
++	}
++
++	public getEffectTimeRemaining(type: PowerUpType): number {
++		const effects = this.effects.get(type);
++		if (!effects || effects.length === 0) return 0;
++
++		const currentTime = Date.now();
++		return Math.max(...effects.map(effect => effect.startTime + effect.duration - currentTime));
++	}
++
++	private getMoveDelay(): number {
++		return 1000 / this.getCurrentSpeed();
++	}
++
++	public getCurrentSpeed(): number {
++		let speed = this.baseSpeed;
++
++		// Apply speed effects
++		const speedEffects = this.effects.get('speed');
++		if (speedEffects) {
++			for (const effect of speedEffects) {
++				if (effect.boost) {
++					speed *= effect.boost;
++				}
++			}
++		}
++
++		return speed;
++	}
++
++	public getPointsMultiplier(): number {
++		let multiplier = 1;
++
++		// Apply points effects
++		const pointsEffects = this.effects.get('points');
++		if (pointsEffects) {
++			for (const effect of pointsEffects) {
++				if (effect.multiplier) {
++					multiplier *= effect.multiplier;
++				}
++			}
++		}
++
++		return multiplier;
++	}
++
++	public checkCollision(): boolean {
++		const size = this.grid.getSize();
++
++		// Check wall collision if not ghost
++		if (!this.hasEffect('ghost')) {
++			// Check wall collision for both head segments
++			const frontHead = this.segments[0];
++			const backHead = this.segments[1];
++
++			if (
++				frontHead.x < 0 ||
++				frontHead.x >= size.width ||
++				frontHead.y < 0 ||
++				frontHead.y >= size.height ||
++				backHead.x < 0 ||
++				backHead.x >= size.width ||
++				backHead.y < 0 ||
++				backHead.y >= size.height
++			) {
++				return true;
++			}
++
++			// Check self collision (start from segment 2 since 0,1 are head)
++			return this.segments
++				.slice(2)
++				.some(
++					segment =>
++						(segment.x === frontHead.x && segment.y === frontHead.y) ||
++						(segment.x === backHead.x && segment.y === backHead.y)
++				);
++		} else {
++			// In ghost mode, wrap both head segments around the edges
++			const frontHead = this.segments[0];
++			const backHead = this.segments[1];
++
++			if (frontHead.x < 0) frontHead.x = size.width - 1;
++			if (frontHead.x >= size.width) frontHead.x = 0;
++			if (frontHead.y < 0) frontHead.y = size.height - 1;
++			if (frontHead.y >= size.height) frontHead.y = 0;
++
++			if (backHead.x < 0) backHead.x = size.width - 1;
++			if (backHead.x >= size.width) backHead.x = 0;
++			if (backHead.y < 0) backHead.y = size.height - 1;
++			if (backHead.y >= size.height) backHead.y = 0;
++
++			return false; // No collisions in ghost mode
++		}
++	}
++
++	public checkFoodCollision(food: Food): boolean {
++		if (!food) return false;
++		const head = this.segments[0];
++		return head.x === food.getPosition().x && head.y === food.getPosition().y;
++	}
++
++	public checkPowerUpCollision(powerUp: any): boolean {
++		if (!powerUp) return false;
++		const head = this.segments[0];
++		return head.x === powerUp.position.x && head.y === powerUp.position.y;
++	}
++
++	public addEffect(type: PowerUpType): void {
++		if (!this.effects.has(type)) {
++			this.effects.set(type, []);
++		}
++
++		const config = this.config.powerUps.effects[type];
++
++		const effect: Effect = {
++			type,
++			startTime: Date.now(),
++			duration: config.duration,
++			boost: config.boost,
++			multiplier: config.multiplier,
++		};
++
++		this.effects.get(type)!.push(effect);
++	}
++
++	public draw(p5: P5, time: number): void {
++		const cellSize = this.grid.getCellSize();
++
++		// Draw body segments (in reverse to layer properly)
++		for (let i = this.interpolatedSegments.length - 1; i >= 2; i--) {
++			this.drawBodySegment(p5, this.interpolatedSegments[i], cellSize);
++			this.drawSegmentEffects(p5, this.interpolatedSegments[i], i, time, cellSize);
++		}
++
++		// Draw head (both segments)
++		this.drawHead(p5, this.interpolatedSegments[0], cellSize);
++		this.drawHead(p5, this.interpolatedSegments[1], cellSize);
++
++		// Draw effects for head segments
++		this.drawSegmentEffects(p5, this.interpolatedSegments[0], 0, time, cellSize);
++		this.drawSegmentEffects(p5, this.interpolatedSegments[1], 1, time, cellSize);
++	}
++
++	private drawBodySegment(p5: P5, pos: Position, cellSize: number): void {
++		const segmentConfig = this.snakeConfig.segments;
++		const size = cellSize * segmentConfig.size;
++
++		p5.push();
++		if (this.hasEffect('ghost')) {
++			this.applyGhostEffect(p5);
++		}
++
++		p5.translate(pos.x * cellSize + cellSize / 2, pos.y * cellSize + cellSize / 2);
++		p5.noStroke();
++		p5.fill(this.snakeConfig.colors.body);
++		p5.rect(-size / 2, -size / 2, size, size, segmentConfig.cornerRadius);
++
++		this.resetEffects(p5);
++		p5.pop();
++	}
++
++	private drawHead(p5: P5, pos: Position, cellSize: number): void {
++		const segmentConfig = this.snakeConfig.segments;
++		const headSize = cellSize * segmentConfig.size;
++		const headLength = cellSize * segmentConfig.size;
++
++		p5.push();
++		if (this.hasEffect('ghost')) {
++			this.applyGhostEffect(p5);
++		}
++
++		p5.translate(pos.x * cellSize + cellSize / 2, pos.y * cellSize + cellSize / 2);
++
++		// Rotate based on direction
++		let rotation = 0;
++		switch (this.direction) {
++			case 'up':
++				rotation = -Math.PI / 2;
++				break;
++			case 'down':
++				rotation = Math.PI / 2;
++				break;
++			case 'left':
++				rotation = Math.PI;
++				break;
++			case 'right':
++				rotation = 0;
++				break;
++		}
++		p5.rotate(rotation);
++
++		// Draw head shape
++		p5.noStroke();
++		p5.fill(this.snakeConfig.colors.head);
++		p5.rect(-headSize / 2, -headSize / 2, headLength, headSize, segmentConfig.cornerRadius);
++
++		// Draw eyes
++		this.drawEyes(p5, 0, 0, headSize, headLength);
++
++		this.resetEffects(p5);
++		p5.pop();
++	}
++
++	private drawEyes(p5: P5, x: number, y: number, headWidth: number, headLength: number): void {
++		const eyeSize = headWidth * 0.2;
++		const pupilSize = eyeSize * 0.5;
++		const eyeOffset = headWidth * 0.2;
++
++		// Draw eye whites
++		p5.fill(255);
++		p5.ellipse(x + headLength * 0.3, y - eyeOffset, eyeSize);
++		p5.ellipse(x + headLength * 0.3, y + eyeOffset, eyeSize);
++
++		// Draw pupils
++		p5.fill(0);
++		p5.ellipse(x + headLength * 0.35, y - eyeOffset, pupilSize);
++		p5.ellipse(x + headLength * 0.35, y + eyeOffset, pupilSize);
++	}
++
++	private drawSegmentEffects(
++		p5: P5,
++		pos: Position,
++		index: number,
++		time: number,
++		cellSize: number
++	): void {
++		p5.push();
++		p5.translate(pos.x * cellSize + cellSize / 2, pos.y * cellSize + cellSize / 2);
++
++		// Draw points effect
++		if (this.hasEffect('points')) {
++			const phase = (time / 500 + index * 0.2) % 1;
++			const size = cellSize * (0.5 + 0.2 * Math.sin(phase * Math.PI * 2));
++
++			p5.noFill();
++			p5.stroke(255, 255, 0, 100);
++			p5.strokeWeight(2);
++			this.drawStar(p5, 0, 0, size * 0.4, size * 0.8, 5);
++		}
++
++		p5.pop();
++	}
++
++	private drawStar(
++		p5: P5,
++		x: number,
++		y: number,
++		radius1: number,
++		radius2: number,
++		npoints: number
++	): void {
++		const angle = (Math.PI * 2) / npoints;
++		const halfAngle = angle / 2.0;
++
++		p5.beginShape();
++		for (let a = 0; a < Math.PI * 2; a += angle) {
++			let sx = x + Math.cos(a) * radius2;
++			let sy = y + Math.sin(a) * radius2;
++			p5.vertex(sx, sy);
++			sx = x + Math.cos(a + halfAngle) * radius1;
++			sy = y + Math.sin(a + halfAngle) * radius1;
++			p5.vertex(sx, sy);
++		}
++		p5.endShape(p5.CLOSE);
++	}
++
++	private applyGhostEffect(p5: P5): void {
++		(p5.drawingContext as DrawingContext).globalAlpha = 0.5;
++	}
++
++	private resetEffects(p5: P5): void {
++		(p5.drawingContext as DrawingContext).globalAlpha = 1.0;
++	}
++
++	public drawSpeedVector(p5: P5): void {
++		const head = this.segments[0];
++		const cellSize = this.grid.getCellSize();
++		const speed = this.getCurrentSpeed();
++
++		p5.push();
++		p5.translate(head.x * cellSize + cellSize / 2, head.y * cellSize + cellSize / 2);
++
++		// Draw speed indicator
++		p5.stroke(255, 255, 0);
++		p5.strokeWeight(2);
++		p5.noFill();
++		p5.line(0, 0, speed * 10, 0);
++		p5.ellipse(speed * 10, 0, 5);
++
++		p5.pop();
++	}
++
++	public getDirection(): Direction {
++		return this.direction;
++	}
++
++	// New method for interpolating segments
++	private interpolateSegments(): void {
++		// Only interpolate if we have a source and target
++		if (!this.sourcePosition || !this.targetPosition) return;
++
++		// Create a copy of segments for interpolation
++		this.interpolatedSegments = this.segments.map((segment, index) => {
++			if (index === 0) {
++				// Interpolate head position
++				return {
++					x:
++						this.sourcePosition.x +
++						(this.targetPosition.x - this.sourcePosition.x) *
++							this.easeInOutQuad(this.interpolationProgress),
++					y:
++						this.sourcePosition.y +
++						(this.targetPosition.y - this.sourcePosition.y) *
++							this.easeInOutQuad(this.interpolationProgress),
++				};
++			}
++			return segment;
++		});
++	}
++
++	// Easing function for smoother interpolation
++	private easeInOutQuad(t: number): number {
++		return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
++	}
++}
++
+
+# 2024-12-05 17:46:17.266593
++I was looking for something with a wow factor
+
+# 2024-12-05 17:48:44.383802
++I reverted the changes like I said I want the effects to have a real wow factor 
+
+# 2024-12-05 17:49:32.871884
++Is this the best you can do?
+
+# 2024-12-05 17:52:02.220783
++For the ghost effect make the snake look like ice blocks, the points effect I already really like please take inspiration from that, for the speed make it look like speedy gonzalles.. I reverted the changes so please refresh your context
+
+# 2024-12-05 17:54:04.966184
++I like the ghost effect can you make it a little very light bluw ice color, the speed affect is not what I had in mind... you removed the one effect I love the points effect...
+
+# 2024-12-05 17:55:05.070940
++Can you make the points effect a little more pronouced/bold
+
+# 2024-12-05 17:55:32.453662
++And leave some stars in the wake of the snake
+
+# 2024-12-05 17:57:30.723404
++sorry only for points effect, do not apply start to regualr snake only when point effect is active and leave a wake of smaller start in the trail of the snake so a couple of cells after the end of the segments
+
+# 2024-12-05 17:58:37.307588
++for points effect can you have the snake leave a trail of stars behind it's tail
+
+# 2024-12-05 17:59:10.382042
++[plugin:vite:esbuild] Transform failed with 1 error:
++/Users/alphab/Dev/snaked-again/src/entities/Snake.ts:59:9: ERROR: Expected ";" but found "directionToAngle"
++/Users/alphab/Dev/snaked-again/src/entities/Snake.ts:59:9
++Expected ";" but found "directionToAngle"
++57 |  	
++58 |  	// Helper method to convert direction to angle
++59 |  	private directionToAngle(direction: Direction): number {
++   |           ^
++60 |  		switch (direction) {
+
+# 2024-12-05 17:59:26.630856
++[plugin:vite:esbuild] Transform failed with 1 error:
++/Users/alphab/Dev/snaked-again/src/entities/Snake.ts:58:9: ERROR: Expected ";" but found "directionToAngle"
++/Users/alphab/Dev/snaked-again/src/entities/Snake.ts:58:9
++Expected ";" but found "directionToAngle"
++56 |  		this.interpolatedSegments = [...this.segments];
++57 |  	// Helper method to convert direction to angle
++58 |  	private directionToAngle(direction: Direction): number {
++   |           ^
++59 |  		switch (direction) {
++60 |  			case 'up':
++    at failureErrorWithLog (/Users/alphab/Dev/snaked-again/node_modules/esbuild/lib/main.js:1472:15)
++    at /Users/alphab/Dev/snaked-again/node_modules/esbuild/lib/main.js:755:50
++    at responseCallbacks.<computed> (/Users/alphab/Dev/snaked-again/node_modules/esbuild/lib/main.js:622:9)
++    at handleIncomingPacket (/Users/alphab/Dev/snaked-again/node_modules/esbuild/lib/main.js:677:12)
++    at Socket.readFromStdout (/Users/alphab/Dev/snaked-again/node_modules/esbuild/lib/main.js:600:7)
++    at Socket.emit (node:events:517:28)
++    at addChunk (node:internal/streams/readable:368:12)
++    at readableAddChunk (node:internal/streams/readable:341:9)
++    at Readable.push (node:internal/streams/readable:278:10)
++    at Pipe.onStreamRead (node:internal/stream_base_commons:190:23
++
+
+# 2024-12-05 18:00:06.547131
++ght TypeError: Cannot read properties of undefined (reading 'length')
++    at Snake.reset (Snake.ts:95:48)
++    at new Snake (Snake.ts:53:8)
++    at new Game (main.ts:45:16)
++    at p.setup (main.ts:656:10)
++    at g._setup (p5.min.js:2:466532)
++    at g._start (p5.min.js:2:465215)   import type P5 from 'p5';
++import configManager from '../config/gameConfig';
++import type { GameConfig, SnakeConfig, PowerUpType } from '../config/types.ts';
++import type { SnakeGame } from '../types';
++import type { Grid } from '../core/Grid';
++import type { Position, Effect, Direction, DrawingContext } from './types';
++import { Food } from '../entities/Food';
++
++/**
++ * Snake class representing the player-controlled snake in the game.
++ */
++export class Snake {
++	public readonly effects: Map<PowerUpType, Effect[]>;
++	public readonly segments: Position[];
++	public foodEaten: number;
++	public score: number;
++
++	private readonly grid: Grid;
++	private readonly game: SnakeGame;
++	private readonly config: GameConfig;
++	private baseSpeed: number;
++	private direction: Direction;
++	private growing: boolean;
++	private lastMoveTime: number;
++	private moveInterval: number = 0;
++	private nextDirection: Direction;
++	private snakeConfig: SnakeConfig;
++
++	// New interpolation properties with definite initialization
++	private interpolationProgress: number = 0;
++	private sourcePosition: Position = { x: 0, y: 0 };
++	private targetPosition: Position = { x: 0, y: 0 };
++	private interpolatedSegments: Position[];
++
++	constructor(grid: Grid, game: SnakeGame) {
++		this.grid = grid;
++		this.game = game;
++		this.config = configManager.getConfig();
++		this.effects = new Map();
++
++		// Initialize base properties
++		this.segments = [];
++		this.direction = (this.config.snake.initialDirection as Direction) || 'right';
++		this.nextDirection = this.direction;
++		this.lastMoveTime = 0;
++		this.score = 0;
++		this.growing = false;
++		this.foodEaten = 0;
++		this.baseSpeed = this.config.difficulty.presets[this.config.difficulty.current].baseSpeed;
++		this.snakeConfig = this.config.snake;
++
++		// Initialize snake segments
++		this.reset();
++
++		// Initialize interpolated segments
++		this.interpolatedSegments = [...this.segments];
++	}
++	// Helper method to convert direction to angle
++	private directionToAngle(direction: Direction): number {
++		switch (direction) {
++			case 'up':
++				return -Math.PI / 2;
++			case 'down':
++				return Math.PI / 2;
++			case 'left':
++				return Math.PI;
++			case 'right':
++				return 0;
++			default:
++				return 0;
++		}
++	}
++
++	public reset(): void {
++		const gridSize = this.grid.getSize();
++
++		// Calculate center position
++		const centerX = Math.floor(gridSize.width / 2);
++		const centerY = Math.floor(gridSize.height / 2);
++
++		// Clear segments array
++		this.segments.length = 0;
++
++		// Add head segments (always 2 cells)
++		this.segments.push(
++			{ x: centerX, y: centerY }, // Front of head
++			{ x: centerX - 1, y: centerY } // Back of head
++		);
++
++		// Add initial body segments based on config
++		for (let i = 0; i < this.snakeConfig.initialLength - 2; i++) {
++			this.segments.push({ x: centerX - (i + 2), y: centerY });
++
++			// Draw star trail behind the tail
++			const tailIndex = this.interpolatedSegments.length - 1;
++			if (index === tailIndex) {
++				const trailLength = 3; // Number of cells to leave a trail
++				for (let i = 1; i <= trailLength; i++) {
++					const trailPos = {
++						x: pos.x - i * Math.cos(this.directionToAngle(this.direction)),
++						y: pos.y - i * Math.sin(this.directionToAngle(this.direction)),
++					};
++					p5.push();
++					p5.translate(
++						trailPos.x * cellSize + cellSize / 2,
++						trailPos.y * cellSize + cellSize / 2
++					);
++					const trailSize = cellSize * (0.1 + 0.05 * Math.sin(trailPhase * Math.PI * 2));
++					p5.stroke(255, 223, 0, 100); // Light gold color for trail
++					p5.strokeWeight(1);
++					this.drawStar(p5, 0, 0, trailSize * 0.2, trailSize * 0.4, 5);
++					p5.pop();
++				}
++			}
++		}
++
++		// Reset properties
++		this.direction = (this.snakeConfig.initialDirection as Direction) || 'right';
++		this.nextDirection = this.direction;
++		this.lastMoveTime = 0;
++		this.score = 0;
++		this.growing = false;
++		this.foodEaten = 0;
++		this.effects.clear();
++		this.baseSpeed = this.config.difficulty.presets[this.config.difficulty.current].baseSpeed;
++	}
++
++	public update(currentTime: number): boolean {
++		// Update effects first
++		this.updateEffects();
++
++		// Check if it's time to move
++		if (!this.lastMoveTime) {
++			this.lastMoveTime = currentTime;
++			return false;
++		}
++
++		const elapsed = currentTime - this.lastMoveTime;
++		if (elapsed < this.getMoveDelay()) {
++			// Continue interpolation even when not moving
++			if (this.interpolationProgress < 1) {
++				this.interpolationProgress += 0.2;
++				this.interpolateSegments();
++			}
++			return false;
++		}
++
++		// Update direction and move
++		this.direction = this.nextDirection;
++		const head: Position = { ...this.segments[0] };
++
++		// Calculate new head position
++		switch (this.direction) {
++			case 'up':
++				head.y--;
++				break;
++			case 'down':
++				head.y++;
++				break;
++			case 'left':
++				head.x--;
++				break;
++			case 'right':
++				head.x++;
++				break;
++		}
++
++		// Handle wrapping in ghost mode
++		const size = this.grid.getSize();
++		if (this.hasEffect('ghost')) {
++			if (head.x < 0) head.x = size.width - 1;
++			if (head.x >= size.width) head.x = 0;
++			if (head.y < 0) head.y = size.height - 1;
++			if (head.y >= size.height) head.y = 0;
++		}
++
++		// Store current position for interpolation
++		this.sourcePosition = { ...this.segments[0] };
++		this.targetPosition = head;
++		this.interpolationProgress = 0;
++
++		// Update segments
++		this.segments.unshift(head);
++		if (!this.growing) {
++			this.segments.pop();
++		}
++		this.growing = false;
++
++		// Interpolate segments
++		this.interpolateSegments();
++
++		// Update move timing
++		this.lastMoveTime = currentTime;
++		this.moveInterval = 1000 / this.getCurrentSpeed();
++
++		return true;
++	}
++
++	public setDirection(newDirection: Direction): void {
++		// Prevent 180-degree turns
++		const opposites: Record<Direction, Direction> = {
++			up: 'down',
++			down: 'up',
++			left: 'right',
++			right: 'left',
++		};
++
++		if (this.direction !== opposites[newDirection]) {
++			this.nextDirection = newDirection;
++		}
++	}
++
++	public grow(): void {
++		this.growing = true;
++		this.foodEaten = (this.foodEaten || 0) + 1;
++		this.score += Math.round(10 * this.getPointsMultiplier());
++
++		if (this.snakeConfig.speedProgression.enabled) {
++			// Get current difficulty base speed
++			const difficultyBaseSpeed =
++				this.config.difficulty.presets[this.config.difficulty.current].baseSpeed;
++
++			// Calculate speed increase
++			const speedIncrease =
++				this.foodEaten * this.snakeConfig.speedProgression.increasePerFood;
++
++			// Apply speed increase with maximum cap
++			this.baseSpeed = Math.min(
++				difficultyBaseSpeed + speedIncrease,
++				this.snakeConfig.speedProgression.maxSpeed
++			);
++		}
++	}
++
++	private updateEffects(): void {
++		const currentTime = Date.now();
++
++		// Check each effect type
++		for (const [type, effects] of this.effects.entries()) {
++			// Remove expired effects
++			const activeEffects = effects.filter(
++				effect => currentTime - effect.startTime < effect.duration
++			);
++
++			if (activeEffects.length > 0) {
++				this.effects.set(type, activeEffects);
++			} else {
++				this.effects.delete(type);
++			}
++		}
++	}
++
++	public hasEffect(type: PowerUpType): boolean {
++		return this.effects.has(type) && this.effects.get(type)!.length > 0;
++	}
++
++	public getEffectTimeRemaining(type: PowerUpType): number {
++		const effects = this.effects.get(type);
++		if (!effects || effects.length === 0) return 0;
++
++		const currentTime = Date.now();
++		return Math.max(...effects.map(effect => effect.startTime + effect.duration - currentTime));
++	}
++
++	private getMoveDelay(): number {
++		return 1000 / this.getCurrentSpeed();
++	}
++
++	public getCurrentSpeed(): number {
++		let speed = this.baseSpeed;
++
++		// Apply speed effects
++		const speedEffects = this.effects.get('speed');
++		if (speedEffects) {
++			for (const effect of speedEffects) {
++				if (effect.boost) {
++					speed *= effect.boost;
++				}
++			}
++		}
++
++		return speed;
++	}
++
++	public getPointsMultiplier(): number {
++		let multiplier = 1;
++
++		// Apply points effects
++		const pointsEffects = this.effects.get('points');
++		if (pointsEffects) {
++			for (const effect of pointsEffects) {
++				if (effect.multiplier) {
++					multiplier *= effect.multiplier;
++				}
++			}
++		}
++
++		return multiplier;
++	}
++
++	public checkCollision(): boolean {
++		const size = this.grid.getSize();
++
++		// Check wall collision if not ghost
++		if (!this.hasEffect('ghost')) {
++			// Check wall collision for both head segments
++			const frontHead = this.segments[0];
++			const backHead = this.segments[1];
++
++			if (
++				frontHead.x < 0 ||
++				frontHead.x >= size.width ||
++				frontHead.y < 0 ||
++				frontHead.y >= size.height ||
++				backHead.x < 0 ||
++				backHead.x >= size.width ||
++				backHead.y < 0 ||
++				backHead.y >= size.height
++			) {
++				return true;
++			}
++
++			// Check self collision (start from segment 2 since 0,1 are head)
++			return this.segments
++				.slice(2)
++				.some(
++					segment =>
++						(segment.x === frontHead.x && segment.y === frontHead.y) ||
++						(segment.x === backHead.x && segment.y === backHead.y)
++				);
++		} else {
++			// In ghost mode, wrap both head segments around the edges
++			const frontHead = this.segments[0];
++			const backHead = this.segments[1];
++
++			if (frontHead.x < 0) frontHead.x = size.width - 1;
++			if (frontHead.x >= size.width) frontHead.x = 0;
++			if (frontHead.y < 0) frontHead.y = size.height - 1;
++			if (frontHead.y >= size.height) frontHead.y = 0;
++
++			if (backHead.x < 0) backHead.x = size.width - 1;
++			if (backHead.x >= size.width) backHead.x = 0;
++			if (backHead.y < 0) backHead.y = size.height - 1;
++			if (backHead.y >= size.height) backHead.y = 0;
++
++			return false; // No collisions in ghost mode
++		}
++	}
++
++	public checkFoodCollision(food: Food): boolean {
++		if (!food) return false;
++		const head = this.segments[0];
++		return head.x === food.getPosition().x && head.y === food.getPosition().y;
++	}
++
++	public checkPowerUpCollision(powerUp: any): boolean {
++		if (!powerUp) return false;
++		const head = this.segments[0];
++		return head.x === powerUp.position.x && head.y === powerUp.position.y;
++	}
++
++	public addEffect(type: PowerUpType): void {
++		if (!this.effects.has(type)) {
++			this.effects.set(type, []);
++		}
++
++		const config = this.config.powerUps.effects[type];
++
++		const effect: Effect = {
++			type,
++			startTime: Date.now(),
++			duration: config.duration,
++			boost: config.boost,
++			multiplier: config.multiplier,
++		};
++
++		this.effects.get(type)!.push(effect);
++	}
++
++	public draw(p5: P5, time: number): void {
++		const cellSize = this.grid.getCellSize();
++
++		// Draw body segments (in reverse to layer properly)
++		for (let i = this.interpolatedSegments.length - 1; i >= 2; i--) {
++			this.drawBodySegment(p5, this.interpolatedSegments[i], cellSize);
++			this.drawSegmentEffects(p5, this.interpolatedSegments[i], i, time, cellSize);
++		}
++
++		// Draw head (both segments)
++		this.drawHead(p5, this.interpolatedSegments[0], cellSize);
++		this.drawHead(p5, this.interpolatedSegments[1], cellSize);
++
++		// Draw effects for head segments
++		this.drawSegmentEffects(p5, this.interpolatedSegments[0], 0, time, cellSize);
++		this.drawSegmentEffects(p5, this.interpolatedSegments[1], 1, time, cellSize);
++	}
++
++	private drawBodySegment(p5: P5, pos: Position, cellSize: number): void {
++		const segmentConfig = this.snakeConfig.segments;
++		const size = cellSize * segmentConfig.size;
++
++		p5.push();
++		if (this.hasEffect('ghost')) {
++			this.applyGhostEffect(p5);
++		}
++
++		p5.translate(pos.x * cellSize + cellSize / 2, pos.y * cellSize + cellSize / 2);
++		p5.noStroke();
++		p5.fill(this.snakeConfig.colors.body);
++		p5.rect(-size / 2, -size / 2, size, size, segmentConfig.cornerRadius);
++
++		this.resetEffects(p5);
++		p5.pop();
++	}
++
++	private drawHead(p5: P5, pos: Position, cellSize: number): void {
++		const segmentConfig = this.snakeConfig.segments;
++		const headSize = cellSize * segmentConfig.size;
++		const headLength = cellSize * segmentConfig.size;
++
++		p5.push();
++		if (this.hasEffect('ghost')) {
++			this.applyGhostEffect(p5);
++		}
++
++		p5.translate(pos.x * cellSize + cellSize / 2, pos.y * cellSize + cellSize / 2);
++
++		// Rotate based on direction
++		let rotation = 0;
++		switch (this.direction) {
++			case 'up':
++				rotation = -Math.PI / 2;
++				break;
++			case 'down':
++				rotation = Math.PI / 2;
++				break;
++			case 'left':
++				rotation = Math.PI;
++				break;
++			case 'right':
++				rotation = 0;
++				break;
++		}
++		p5.rotate(rotation);
++
++		// Draw head shape
++		p5.noStroke();
++		p5.fill(this.snakeConfig.colors.head);
++		p5.rect(-headSize / 2, -headSize / 2, headLength, headSize, segmentConfig.cornerRadius);
++
++		// Draw eyes
++		this.drawEyes(p5, 0, 0, headSize, headLength);
++
++		this.resetEffects(p5);
++		p5.pop();
++	}
++
++	private drawEyes(p5: P5, x: number, y: number, headWidth: number, headLength: number): void {
++		const eyeSize = headWidth * 0.2;
++		const pupilSize = eyeSize * 0.5;
++		const eyeOffset = headWidth * 0.2;
++
++		// Draw eye whites
++		p5.fill(255);
++		p5.ellipse(x + headLength * 0.3, y - eyeOffset, eyeSize);
++		p5.ellipse(x + headLength * 0.3, y + eyeOffset, eyeSize);
++
++		// Draw pupils
++		p5.fill(0);
++		p5.ellipse(x + headLength * 0.35, y - eyeOffset, pupilSize);
++		p5.ellipse(x + headLength * 0.35, y + eyeOffset, pupilSize);
++	}
++
++	private drawSegmentEffects(
++		p5: P5,
++		pos: Position,
++		index: number,
++		time: number,
++		cellSize: number
++	): void {
++		p5.push();
++		p5.translate(pos.x * cellSize + cellSize / 2, pos.y * cellSize + cellSize / 2);
++
++		// Draw points effect with star trail
++		if (this.hasEffect('points')) {
++			const pointsPhase = (time / 500 + index * 0.2) % 1;
++			const pointsSize = cellSize * (0.5 + 0.2 * Math.sin(pointsPhase * Math.PI * 2));
++
++			p5.noFill();
++			p5.stroke(255, 215, 0, 150); // Brighter gold color
++			p5.strokeWeight(3); // Increased stroke weight for boldness
++			this.drawStar(p5, 0, 0, pointsSize * 0.4, pointsSize * 0.8, 5);
++
++			// Draw star trail effect
++			const trailPhase = (time / 500 + index * 0.2) % 1;
++			const trailSize = cellSize * (0.2 + 0.05 * Math.sin(trailPhase * Math.PI * 2));
++
++			p5.stroke(255, 223, 0, 100); // Light gold color for trail
++			p5.strokeWeight(1);
++			this.drawStar(p5, 0, 0, trailSize * 0.2, trailSize * 0.4, 5);
++		}
++
++		// Draw ghost effect
++		if (this.hasEffect('ghost')) {
++			const iceColor = p5.color(200, 230, 255, 150); // Very light blue for ice
++			p5.fill(iceColor);
++			p5.stroke(iceColor);
++			p5.strokeWeight(1);
++			p5.rect(-cellSize / 2, -cellSize / 2, cellSize, cellSize, 5);
++
++			// Add shimmering effect
++			const shimmer = Math.sin(time / 100 + index) * 50;
++			p5.stroke(255, 255, 255, shimmer);
++			p5.line(-cellSize / 2, -cellSize / 2, cellSize / 2, cellSize / 2);
++			p5.line(cellSize / 2, -cellSize / 2, -cellSize / 2, cellSize / 2);
++		}
++
++		p5.pop();
++	}
++
++	private drawStar(
++		p5: P5,
++		x: number,
++		y: number,
++		radius1: number,
++		radius2: number,
++		npoints: number
++	): void {
++		const angle = (Math.PI * 2) / npoints;
++		const halfAngle = angle / 2.0;
++
++		p5.beginShape();
++		for (let a = 0; a < Math.PI * 2; a += angle) {
++			let sx = x + Math.cos(a) * radius2;
++			let sy = y + Math.sin(a) * radius2;
++			p5.vertex(sx, sy);
++			sx = x + Math.cos(a + halfAngle) * radius1;
++			sy = y + Math.sin(a + halfAngle) * radius1;
++			p5.vertex(sx, sy);
++		}
++		p5.endShape(p5.CLOSE);
++	}
++
++	private applyGhostEffect(p5: P5): void {
++		(p5.drawingContext as DrawingContext).globalAlpha = 0.5;
++	}
++
++	private resetEffects(p5: P5): void {
++		(p5.drawingContext as DrawingContext).globalAlpha = 1.0;
++	}
++
++	public drawSpeedVector(p5: P5): void {
++		const head = this.segments[0];
++		const cellSize = this.grid.getCellSize();
++		const speed = this.getCurrentSpeed();
++
++		p5.push();
++		p5.translate(head.x * cellSize + cellSize / 2, head.y * cellSize + cellSize / 2);
++
++		// Draw speed indicator
++		p5.stroke(255, 255, 0);
++		p5.strokeWeight(2);
++		p5.noFill();
++		p5.line(0, 0, speed * 10, 0);
++		p5.ellipse(speed * 10, 0, 5);
++
++		p5.pop();
++	}
++
++	public getDirection(): Direction {
++		return this.direction;
++	}
++
++	// New method for interpolating segments
++	private interpolateSegments(): void {
++		// Only interpolate if we have a source and target
++		if (!this.sourcePosition || !this.targetPosition) return;
++
++		// Create a copy of segments for interpolation
++		this.interpolatedSegments = this.segments.map((segment, index) => {
++			if (index === 0) {
++				// Interpolate head position
++				return {
++					x:
++						this.sourcePosition.x +
++						(this.targetPosition.x - this.sourcePosition.x) *
++							this.easeInOutQuad(this.interpolationProgress),
++					y:
++						this.sourcePosition.y +
++						(this.targetPosition.y - this.sourcePosition.y) *
++							this.easeInOutQuad(this.interpolationProgress),
++				};
++			}
++			return segment;
++		});
++	}
++
++	// Easing function for smoother interpolation
++	private easeInOutQuad(t: number): number {
++		return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
++	}
++}
++
+
+# 2024-12-05 18:01:47.891034
++Not sure if I am desribing this correctly.. I want to see a trali of stars left behind in the wake of the snakes tail... 
+
+# 2024-12-05 18:02:25.987783
++ok never mind this is not working

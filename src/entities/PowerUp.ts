@@ -1,6 +1,6 @@
 import type P5 from 'p5';
 import configManager from '../config/gameConfig';
-import type { PowerUpConfig, PowerUpType } from '../config/types.consolidated';
+import type { PowerUpConfig, PowerUpType } from '../config/types';
 import type { Obstacle, Position } from './types';
 import type { Snake } from './Snake';
 import type { Grid } from '../core/Grid';

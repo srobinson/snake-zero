@@ -1,4 +1,4 @@
-import { ValidationResult, ValidationRules } from './types.consolidated';
+import { ValidationResult, ValidationRules } from './types';
 
 // Validates a color string in hex format
 function isValidColor(value: string, alpha: boolean = false): boolean {

@@ -10,7 +10,7 @@ export interface Position {
 }
 
 // import type { SnakeGame } from '../types';
-import type { PowerUpType } from '../config/types.consolidated.ts';
+import type { PowerUpType } from '../config/types.ts';
 
 // =========================================
 // Grid Types

@@ -1,16 +1,16 @@
 import p5 from 'p5';
-import { Grid } from '../entities/types';
 import type { SnakeGame } from '../types';
-import { effectsConfig } from '../config/effectsConfig';
-import { Particle } from '../entities/Particle';
-import {
+import type {
 	EffectConfig,
 	ScoreParticleConfig,
 	PowerUpParticleConfig,
 	ActiveEffectParticleConfig,
 	Position,
-} from '../config/types.consolidated';
-import { validateParticleConfig } from '../config/utils.tmp';
+} from '../config/types';
+import { Grid } from '../entities/types';
+import { Particle } from '../entities/Particle';
+import { effectsConfig } from '../config/effectsConfig';
+import { validateParticleConfig } from '../config/particleConfig';
 
 class Particles {
 	private p5: p5;

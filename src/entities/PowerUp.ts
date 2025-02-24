@@ -10,11 +10,13 @@ import type { Grid } from '../core/Grid';
  * temporary effects to the snake when collected.
  */
 export class PowerUp {
+	position: Position;
+	type: PowerUpType;
+
 	private grid: Grid;
 	private config: PowerUpConfig;
-	private position: Position;
-	private type: PowerUpType;
 	private spawnTime: number;
+	private crystalPath: Path2D | null = null;
 
 	/**
 	 * Creates a new PowerUp instance
@@ -24,10 +26,27 @@ export class PowerUp {
 	constructor(grid: Grid, obstacles: Obstacle[] = []) {
 		this.grid = grid;
 		this.config = configManager.getConfig().powerUps;
-
 		this.position = this.getRandomPosition(obstacles);
 		this.type = this.getRandomType();
 		this.spawnTime = Date.now();
+		this.createCrystalPath();
+	}
+
+	private createCrystalPath(): void {
+		const cellSize = this.grid.getCellSize();
+		const baseSize = this.config.visual?.baseSize || 1;
+		const effectScale = cellSize < 20 ? baseSize * 0.5 : baseSize;
+		const glowSize = cellSize * effectScale;
+		this.crystalPath = new Path2D();
+		const points = 6;
+		for (let i = 0; i < points; i++) {
+			const angle = (i * Math.PI * 2) / points;
+			const x = (Math.cos(angle) * glowSize) / 2;
+			const y = (Math.sin(angle) * glowSize) / 2;
+			if (i === 0) this.crystalPath.moveTo(x, y);
+			else this.crystalPath.lineTo(x, y);
+		}
+		this.crystalPath.closePath();
 	}
 
 	/**
@@ -68,11 +87,21 @@ export class PowerUp {
 	 * @throws {Error} If no valid power-up types are configured
 	 */
 	private getRandomType(): PowerUpType {
-		const types = this.config.types;
-		if (types.length === 0) {
-			throw new Error('No valid power-up types configured');
+		const config = this.config;
+		const types = config.types;
+		if (types.length === 0) return 'speed';
+
+		// Weighted random selection
+		if (config.spawnRates) {
+			const rand = Math.random();
+			let cumulative = 0;
+			for (const type of types) {
+				cumulative += config.spawnRates[type] || 0;
+				if (rand < cumulative) return type as PowerUpType;
+			}
 		}
-		return types[Math.floor(Math.random() * types.length)];
+		// Fallback to uniform if no spawnRates or sum < 1
+		return types[Math.floor(Math.random() * types.length)] as PowerUpType;
 	}
 
 	/**
@@ -83,20 +112,6 @@ export class PowerUp {
 	 */
 	apply(snake: Snake): void {
 		snake.addEffect(this.type);
-	}
-
-	/**
-	 * Gets the power-up's position
-	 */
-	get currentPosition(): Position {
-		return { ...this.position };
-	}
-
-	/**
-	 * Gets the power-up's type
-	 */
-	get powerUpType(): PowerUpType {
-		return this.type;
 	}
 
 	/**
@@ -142,7 +157,8 @@ export class PowerUp {
 		// Draw crystal backdrop (hexagonal)
 		p5.noStroke();
 		p5.fill(color + '33'); // Semi-transparent
-		this.#drawCrystal(p5, glowSize);
+		p5.drawingContext.fill(this.crystalPath!);
+		// this.#drawCrystal(p5, glowSize);
 
 		// Draw inner icon
 		p5.textAlign(p5.CENTER, p5.CENTER);
@@ -151,10 +167,10 @@ export class PowerUp {
 		p5.text(this.config.icons[this.type], 0, 0);
 
 		// Draw shimmering effect with scaled particles
-		this.#drawShimmer(p5, glowSize);
+		this.#drawShimmer(p5, cellSize * (this.config.visual?.baseSize || 1));
 
 		// Draw energy field
-		this.#drawEnergyField(p5, glowSize, color);
+		this.#drawEnergyField(p5, cellSize * (this.config.visual?.baseSize || 1), color);
 
 		p5.pop();
 	}

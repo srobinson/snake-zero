@@ -17,7 +17,7 @@ export class Food {
 	private config: FoodConfig;
 	private game: SnakeGame;
 	private grid: Grid;
-	private lastPositions: Set<string>;
+	private lastPositions: Set<Position>;
 	private position: Position;
 	private spawnTime: number;
 	private type: FoodType;
@@ -29,20 +29,53 @@ export class Food {
 		this.type = this.getRandomType();
 		this.color = this.config.colors[this.type].primary!;
 		this.lastPositions = new Set();
-		this.position = this.getRandomPosition();
+		this.position = this.getInitialPosition();
 		this.spawnTime = Date.now();
 	}
 
-	public getPosition(): Position {
-		return this.position;
+	private getInitialPosition(): Position {
+		let newPosition: Position;
+		let attempts = 0;
+		const maxAttempts = 100;
+		const snakeSegments = this.game.getSnake().segments;
+
+		do {
+			newPosition = this.getRandomPosition();
+			attempts++;
+			const hasConflict = snakeSegments.some(segment =>
+				this.arePositionsEqual(segment, newPosition)
+			);
+			if (!hasConflict) break;
+		} while (attempts < maxAttempts);
+
+		if (attempts >= maxAttempts) {
+			// Fallback: Find first free position (rare case)
+			newPosition = this.findFreePosition(snakeSegments);
+		}
+
+		return newPosition;
 	}
 
-	public getColor(): string {
-		return this.color;
+	private findFreePosition(obstacles: Position[]): Position {
+		const gridSize = this.grid.getSize();
+		for (let y = 0; y < gridSize.height; y++) {
+			for (let x = 0; x < gridSize.width; x++) {
+				const pos = { x, y };
+				if (!obstacles.some(ob => this.arePositionsEqual(ob, pos))) {
+					return pos;
+				}
+			}
+		}
+		// If grid is full (extremely rare), return a default safe spot
+		return { x: 0, y: 0 };
 	}
 
 	private getRandomPosition(): Position {
 		return this.grid.getRandomPosition(true);
+	}
+
+	private arePositionsEqual(pos1: Position, pos2: Position): boolean {
+		return pos1.x === pos2.x && pos1.y === pos2.y;
 	}
 
 	private getRandomType(): FoodType {
@@ -53,18 +86,23 @@ export class Food {
 		return 'regular';
 	}
 
+	public getType(): FoodType {
+		return this.type;
+	}
+
+	public getPosition(): Position {
+		return this.position;
+	}
+
+	public getColor(): string {
+		return this.color;
+	}
+
 	public getPoints(): number {
 		// Get base points for this food type
 		const basePoints = this.config.points[this.type];
-
-		// Apply 2x multiplier if points powerup is active
-		// Use optional chaining to safely get snake effects from game
-		const powerups = this.game?.getSnake().effects ?? new Set();
-		if (powerups.has('points')) {
-			return basePoints * 2;
-		}
-
-		return basePoints;
+		const hasPointsEffect = this.game.getSnake().hasEffect('points');
+		return hasPointsEffect ? basePoints * 2 : basePoints;
 	}
 
 	public get segments(): Position[] {
@@ -79,31 +117,32 @@ export class Food {
 		do {
 			newPosition = this.getRandomPosition();
 			attempts++;
-			// Check if position conflicts with any obstacles or recent positions
 			const hasConflict =
 				obstacles.some(obstacle =>
-					obstacle.segments.some(
-						segment => segment.x === newPosition.x && segment.y === newPosition.y
-					)
-				) || this.lastPositions.has(`${newPosition.x},${newPosition.y}`);
-
-			if (!hasConflict) {
-				break;
-			}
+					obstacle.segments.some(segment => this.arePositionsEqual(segment, newPosition))
+				) ||
+				Array.from(this.lastPositions).some(pos =>
+					this.arePositionsEqual(pos, newPosition)
+				);
+			if (!hasConflict) break;
 		} while (attempts < maxAttempts);
 
-		// Update position and type
+		if (attempts >= maxAttempts) {
+			newPosition = this.findFreePosition(obstacles.flatMap(ob => ob.segments));
+		}
+
 		this.position = newPosition;
 		this.type = this.getRandomType();
-		// Ensure color exists with type assertion
 		this.color = this.config.colors[this.type].primary!;
 		this.spawnTime = Date.now();
 
-		// Add to recent positions (keep last 5)
-		this.lastPositions.add(`${newPosition.x},${newPosition.y}`);
+		this.lastPositions.add({ ...newPosition });
 		if (this.lastPositions.size > 5) {
-			if (this.lastPositions.has(`${this.position.x},${this.position.y}`)) {
-				this.lastPositions.delete(`${this.position.x},${this.position.y}`);
+			const oldest = Array.from(this.lastPositions)[0];
+			if (this.arePositionsEqual(oldest, newPosition)) {
+				this.lastPositions.delete(oldest);
+			} else {
+				this.lastPositions.delete(Array.from(this.lastPositions)[0]);
 			}
 		}
 	}

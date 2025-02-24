@@ -155,6 +155,12 @@ export const defaultConfig: GameConfig = {
 	powerUps: {
 		spawnChance: 0.01,
 		types: ['speed', 'ghost', 'points', 'slow'],
+		spawnRates: {
+			speed: 0.4,
+			ghost: 0.3,
+			points: 0.2,
+			slow: 0.1,
+		},
 		icons: {
 			speed: '⚡',
 			ghost: '👻',

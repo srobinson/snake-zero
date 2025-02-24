@@ -71,22 +71,39 @@ function lightenColor(hex: string, percent: number): string {
 export const effectsConfig: EffectsConfig = {
 	particles: {
 		food: {
-			count: 12,
-			speed: 2,
-			size: {
-				min: 0.1,
-				max: 0.2,
+			regular: {
+				count: 10,
+				speed: 2,
+				size: { min: 0.1, max: 0.2 },
+				lifetime: { min: 600, max: 1000 },
+				colors: ['#FF2222', '#FF4444', '#FFFFFF'],
+				trail: { enabled: true, length: 3, decay: 0.95 },
+				glow: true,
+				sparkle: true,
+				pulse: false,
 			},
-			lifetime: {
-				min: 800,
-				max: 1200,
+			bonus: {
+				count: 15,
+				speed: 2.5,
+				size: { min: 0.15, max: 0.25 },
+				lifetime: { min: 800, max: 1200 },
+				colors: ['#FF22FF', '#FF66FF', '#FFFFFF'],
+				trail: { enabled: true, length: 5, decay: 0.93 },
+				glow: true,
+				sparkle: true,
+				pulse: true,
 			},
-			colors: ['#FFD700', '#FFA500', '#FF4500'],
-			trail: true,
-			glow: true,
-			sparkle: true,
-			pulse: true,
-			rainbow: false,
+			golden: {
+				count: 20,
+				speed: 3,
+				size: { min: 0.2, max: 0.3 },
+				lifetime: { min: 1000, max: 1500 },
+				colors: ['#FFD700', '#FFFF44', '#FFFFFF'],
+				trail: { enabled: true, length: 4, decay: 0.94 },
+				glow: true,
+				sparkle: true,
+				pulse: true,
+			},
 		},
 		powerUps: {
 			speed: {

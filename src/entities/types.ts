@@ -25,6 +25,20 @@ export interface Grid {
 	getCellSize(): number;
 	getWidth(): number;
 	getHeight(): number;
+	getSize(): GridSize;
+
+	updateDimensions(): void;
+	toPixelCoords(x: number, y: number): Position;
+	toGridCoords(pixelX: number, pixelY: number): Position;
+	updateCellSize(newCellSize: number): boolean;
+	draw(p5: import('p5')): void;
+}
+
+export interface GridSize {
+	width: number;
+	height: number;
+	pixelWidth: number;
+	pixelHeight: number;
 }
 
 // =========================================

@@ -1,7 +1,7 @@
 import { EventSystem } from './EventSystem';
 import type { SnakeGame } from '../types';
 import type { StateTransition, StateData } from './types';
-import { GameStates, GameState, VALID_TRANSITIONS } from './types';
+import { GameStates, GameState, ValidTransitions } from './types';
 /**
  * Game state machine that handles state transitions and associated logic.
  * Manages the game's state lifecycle, including:
@@ -51,7 +51,7 @@ export class GameController {
 	 * @returns Whether the transition is valid
 	 */
 	private validateTransition({ from, to }: StateTransition): boolean {
-		return VALID_TRANSITIONS[from]?.includes(to) ?? false;
+		return ValidTransitions[from]?.includes(to) ?? false;
 	}
 
 	/**

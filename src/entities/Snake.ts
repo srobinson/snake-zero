@@ -1,9 +1,10 @@
 import type P5 from 'p5';
-import configManager from '../config/gameConfig';
 import type { GameConfig, SnakeConfig, PowerUpType } from '../config/types.ts';
 import type { SnakeGame } from '../types';
 import type { Grid } from '../core/Grid';
 import type { Position, Effect, Direction, DrawingContext } from './types';
+import configManager from '../config/gameConfig';
+import { GameEvents } from '../config/types';
 import { Food } from '../entities/Food';
 
 /**
@@ -196,7 +197,12 @@ export class Snake {
 	public grow(): void {
 		this.growing = true;
 		this.foodEaten = (this.foodEaten || 0) + 1;
-		this.score += Math.round(10 * this.getPointsMultiplier());
+		// this.score += Math.round(10 * this.getPointsMultiplier());
+		const newSegment = { ...this.segments[this.segments.length - 1] };
+		this.segments.push(newSegment);
+		const basePoints = this.game.getFood().getPoints();
+		const multiplier = this.getPointsMultiplier();
+		this.game.getEvents().emit(GameEvents.SCORE_CHANGED, { score: basePoints * multiplier });
 
 		if (this.snakeConfig.speedProgression.enabled) {
 			// Get current difficulty base speed

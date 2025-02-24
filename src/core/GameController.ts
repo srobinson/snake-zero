@@ -1,7 +1,8 @@
-import { EventSystem } from './EventSystem';
 import type { SnakeGame } from '../types';
 import type { StateTransition, StateData } from './types';
+import { EventSystem } from './EventSystem';
 import { GameStates, GameState, ValidTransitions } from './types';
+import { GameEvents } from '../config/types';
 /**
  * Game state machine that handles state transitions and associated logic.
  * Manages the game's state lifecycle, including:
@@ -131,9 +132,14 @@ export class GameController {
 	 * @param points - Points to add to the current score
 	 */
 	updateScore(points: number): void {
-		if (!this.isInState(GameStates.PLAYING)) return;
+		// if (!this.isInState(GameStates.PLAYING)) return;
+		// this.score += points;
+		// this.events.emit(GameEvents.SCORE_CHANGED, { score: this.score });
 		this.score += points;
-		this.events.emit('score_changed', { score: this.score });
+		const highScore = parseInt(localStorage.getItem('highScore') || '0', 10);
+		if (this.score > highScore) {
+			localStorage.setItem('highScore', this.score.toString());
+		}
 	}
 
 	/**

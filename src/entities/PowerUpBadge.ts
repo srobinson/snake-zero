@@ -73,9 +73,6 @@ export class PowerUpBadge {
 		if (!this.isFloating) {
 			if (this.x !== x || this.y !== y) {
 				// Trigger animation if either changes
-				console.log(
-					`setPosition: ${this.type} from x:${this.x} y:${this.y} to x:${x} y:${y}`
-				); // Debug
 				this.animStartX = this.x;
 				this.animStartY = this.y;
 				this.targetX = x;
@@ -108,12 +105,10 @@ export class PowerUpBadge {
 				const easedT = this.easeOutBack(t);
 				this.x = this.animStartX + (this.targetX - this.animStartX) * easedT;
 				this.y = this.animStartY + (this.targetY - this.animStartY) * easedT;
-				console.log(`Animating ${this.type}: x:${this.x} y:${this.y} t:${t}`); // Debug
 			} else {
 				this.x = this.targetX;
 				this.y = this.targetY;
 				this.animStartTime = null;
-				console.log(`Animation complete ${this.type}: x:${this.x} y:${this.y}`); // Debug
 			}
 		}
 

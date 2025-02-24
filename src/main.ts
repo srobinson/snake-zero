@@ -184,9 +184,6 @@ export default class Game implements SnakeGame {
 					multiplier: multiplier,
 					foodType: this.food.getType(),
 				});
-				this.events.emit(GameEvents.SCORE_CHANGED, {
-					score: this.stateMachine.getCurrentScore(),
-				});
 				this.scoreAnimationTime = currentTime;
 			}
 			if (this.powerUp && this.snake.checkPowerUpCollision(this.powerUp)) {
@@ -542,7 +539,6 @@ export default class Game implements SnakeGame {
 			margin, // y set in constructor to drop from above
 			false
 		);
-		console.log('Badge added:', type, 'total:', this.activeBadges.length + 1);
 		this.activeBadges.push(uiBadge);
 
 		const floatingBadge = new PowerUpBadge(

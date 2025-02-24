@@ -611,10 +611,10 @@ export class Snake {
 		if (this.hasEffect('points')) {
 			const phase = (time / 500 + index * 0.2) % 1;
 			const baseSize = cellSize * (0.8 + 0.3 * Math.sin(phase * Math.PI * 2));
-			
+
 			// Adjust size based on speed effect
-			const size = this.hasEffect('speed') 
-				? baseSize * Math.max(0.4, 1 - (index * 0.05)) // More gradual size decrease
+			const size = this.hasEffect('speed')
+				? baseSize * Math.max(0.4, 1 - index * 0.05) // More gradual size decrease
 				: baseSize;
 
 			// Determine star colors based on ghost effect
@@ -632,12 +632,12 @@ export class Snake {
 
 			// Outer glow
 			p5.noFill();
-			p5.stroke(...outerColor);
+			p5.stroke(outerColor);
 			p5.strokeWeight(6);
 			this.drawStar(p5, 0, 0, size * 0.4, size * 0.8, 5);
 
 			// Inner star
-			p5.stroke(...innerColor);
+			p5.stroke(innerColor);
 			p5.strokeWeight(3);
 			this.drawStar(p5, 0, 0, size * 0.3, size * 0.7, 5);
 
@@ -646,10 +646,11 @@ export class Snake {
 				const trailPhase = (time / 400 + index * 0.3) % 1;
 				const trailSize = size * 0.6;
 				const orbitRadius = cellSize * 0.3 * (1 + Math.sin(trailPhase * Math.PI));
-				
-				p5.stroke(...outerColor.map((c, i) => i === 3 ? c * 0.7 : c));
+
+				p5.stroke(outerColor.map((c, i) => (i === 3 ? c * 0.7 : c)));
 				p5.strokeWeight(2);
-				this.drawStar(p5, 
+				this.drawStar(
+					p5,
 					Math.cos(trailPhase * Math.PI * 2) * orbitRadius,
 					Math.sin(trailPhase * Math.PI * 2) * orbitRadius,
 					trailSize * 0.2,
@@ -687,10 +688,11 @@ export class Snake {
 
 	private drawSpeedTrail(p5: P5, cellSize: number): void {
 		for (let i = 0; i < this.trailPositions.length; i++) {
-			const alpha = ((i + 1) / this.trailPositions.length) * this.snakeConfig.effects.speed.lineOpacity;
+			const alpha =
+				((i + 1) / this.trailPositions.length) * this.snakeConfig.effects.speed.lineOpacity;
 			p5.push();
 			p5.noStroke();
-			
+
 			const segments = this.trailPositions[i];
 			const trailColor = [255, 50, 50]; // Red color for speed trail
 
@@ -698,13 +700,13 @@ export class Snake {
 				const segment = segments[j];
 				const segmentProgress = j / segments.length;
 				const segmentAlpha = alpha * (1 - segmentProgress * 0.5); // Fade out towards tail
-				
+
 				p5.fill(trailColor[0], trailColor[1], trailColor[2], segmentAlpha * 255);
-				
+
 				// Draw the segment with a slight stretch effect
 				const stretchX = cellSize * 1.1;
 				const stretchY = cellSize * 1.1;
-				
+
 				p5.rect(
 					segment.x * cellSize - (stretchX - cellSize) / 2,
 					segment.y * cellSize - (stretchY - cellSize) / 2,

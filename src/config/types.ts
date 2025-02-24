@@ -45,6 +45,8 @@ export interface EventData {
 	points?: number;
 	/** Points multiplier for FOOD_COLLECTED event */
 	multiplier?: number;
+
+	foodType?: FoodType;
 }
 
 /** Game events that can be emitted */
@@ -661,7 +663,7 @@ export interface EffectConfig {
 export interface EffectsConfig {
 	/** Particle effects for food */
 	particles: {
-		food: ParticleConfig;
+		food: Record<FoodType, ParticleConfig>;
 		powerUps: {
 			[key: string]: EffectConfig;
 		};
@@ -772,6 +774,12 @@ export interface PowerUpConfig extends BasePowerUpConfig {
 			boost: number;
 			duration: number;
 		};
+	};
+	spawnRates?: {
+		speed: number;
+		ghost: number;
+		points: number;
+		slow: number;
 	};
 	/** Visual effect settings */
 	visual: PowerUpVisual;
@@ -968,16 +976,20 @@ export interface ParticleConfig {
 		max: number;
 	};
 	/** Lifetime range of particles */
-	lifetime?: {
+	lifetime: {
 		min: number;
 		max: number;
 	};
 	/** Colors of particles */
-	colors?: string[];
+	colors: string[];
 	/** Color of particles */
 	color?: string;
 	/** Whether particles leave a trail */
-	trail?: boolean;
+	trail?: {
+		enabled: boolean;
+		length: number;
+		decay: number;
+	};
 	/** Whether particles have a glow effect */
 	glow?: boolean;
 	/** Whether particles sparkle */

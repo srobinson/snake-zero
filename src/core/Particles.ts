@@ -1,11 +1,12 @@
 import p5 from 'p5';
 import type { SnakeGame } from '../types';
 import type {
-	EffectConfig,
-	ScoreParticleConfig,
-	PowerUpParticleConfig,
 	ActiveEffectParticleConfig,
+	EffectConfig,
+	FoodType,
 	Position,
+	PowerUpParticleConfig,
+	ScoreParticleConfig,
 } from '../config/types';
 import { Grid } from '../entities/types';
 import { Particle } from '../entities/Particle';
@@ -36,87 +37,194 @@ class Particles {
 	 * @param score - Base score value of the food (before multipliers)
 	 * @param multiplier - Current points multiplier from active effects
 	 */
-	createFoodEffect(position: Position, color: string, score = 10, multiplier = 1): void {
+	createFoodEffect(
+		position: Position,
+		color: string,
+		score = 10,
+		multiplier = 1,
+		foodType: FoodType = 'regular'
+	): void {
 		const center = this.grid.getCellCenter(position);
 		const finalScore = score * multiplier;
-		const config = effectsConfig.particles.food;
+		const config = effectsConfig.particles.food[foodType];
 
-		// Create dynamic score text effect
+		// Score text particle
 		const scoreParticleConfig: ScoreParticleConfig = {
 			type: 'score',
 			speed: 3,
-			size: {
-				min: 0.8,
-				max: 1.2,
-			},
-			lifetime: config.lifetime || {
-				min: 1200,
-				max: 1500,
-			},
-			colors: config.colors || ['#ffffff'],
-			trail: {
-				enabled: false,
-			},
+			size: { min: 0.8, max: 1.2 },
+			lifetime: { min: 1200, max: 1500 },
+			colors: ['#ffffff'],
+			trail: { enabled: false },
 			glow: true,
 			sparkle: false,
 			pulse: true,
 			score: finalScore,
 			text: finalScore.toString(),
 			font: 'Bangers',
-			fontSize: this.grid.getCellSize() * (finalScore >= 100 ? 2.5 : 2.0),
+			fontSize: this.grid.getCellSize() * (foodType === 'golden' ? 3 : 2),
 		};
-
-		// Validate configuration before creating particle
 		if (validateParticleConfig(scoreParticleConfig)) {
-			const scoreParticle = new Particle(
-				this.p5,
-				center.x,
-				center.y,
-				scoreParticleConfig,
-				this.grid.getCellSize()
+			this.particles.push(
+				new Particle(
+					this.p5,
+					center.x,
+					center.y,
+					scoreParticleConfig,
+					this.grid.getCellSize()
+				)
 			);
-			this.particles.push(scoreParticle);
 		}
 
-		// Create burst particles
-		const particleCount = Math.min(25, config.count + Math.floor(Math.log10(finalScore) * 3));
+		// Type-specific particle effects
+		const particleCount = Math.min(40, config.count + Math.floor(finalScore / 5));
 
-		for (let i = 0; i < particleCount; i++) {
-			const angle = (i / particleCount) * Math.PI * 2;
-			const speed = config.speed * (0.8 + Math.random() * 0.4);
-
-			const burstParticleConfig: PowerUpParticleConfig = {
-				type: 'powerup',
-				initialAngle: angle,
-				speed: speed * (1 + Math.log10(finalScore) * 0.2),
-				size: {
-					min: config.size.min * (1 + Math.log10(finalScore) * 0.1),
-					max: config.size.max * (1 + Math.log10(finalScore) * 0.1),
-				},
-				lifetime: config.lifetime || {
-					min: 1000,
-					max: 1500,
-				},
-				colors: config.colors || ['#ffffff'],
-				trail: {
-					enabled: true,
-				},
-				glow: true,
-				sparkle: true,
-				pulse: true,
-			};
-
-			// Validate configuration before creating particle
-			if (validateParticleConfig(burstParticleConfig)) {
-				this.particles.push(
-					new Particle(
-						this.p5,
-						center.x,
-						center.y,
-						burstParticleConfig,
-						this.grid.getCellSize()
-					)
-				);
+		if (foodType === 'regular') {
+			// Quick red sparkle burst
+			for (let i = 0; i < particleCount; i++) {
+				const angle = (i / particleCount) * Math.PI * 2;
+				const speed = config.speed * (0.8 + Math.random() * 0.4);
+				const burstConfig: PowerUpParticleConfig = {
+					type: 'powerup',
+					initialAngle: angle,
+					speed,
+					size: config.size,
+					lifetime: config.lifetime,
+					colors: config.colors,
+					trail: config.trail,
+					glow: true,
+					sparkle: true,
+					pulse: false,
+				};
+				if (validateParticleConfig(burstConfig)) {
+					this.particles.push(
+						new Particle(
+							this.p5,
+							center.x,
+							center.y,
+							burstConfig,
+							this.grid.getCellSize()
+						)
+					);
+				}
+			}
+		} else if (foodType === 'bonus') {
+			// Swirling magenta rings
+			const ringCount = Math.floor(particleCount / 3);
+			for (let i = 0; i < ringCount; i++) {
+				const angle = (i / ringCount) * Math.PI * 2;
+				const orbitConfig: PowerUpParticleConfig = {
+					type: 'orbit',
+					initialAngle: angle,
+					speed: config.speed * 0.5,
+					size: config.size,
+					lifetime: { min: config.lifetime.min * 1.2, max: config.lifetime.max * 1.2 },
+					colors: config.colors,
+					trail: config.trail,
+					glow: true,
+					sparkle: true,
+					pulse: true,
+					orbit: {
+						enabled: true,
+						radius: this.grid.getCellSize() * (1 + i * 0.2),
+						speed: 0.1,
+					},
+				};
+				if (validateParticleConfig(orbitConfig)) {
+					this.particles.push(
+						new Particle(
+							this.p5,
+							center.x,
+							center.y,
+							orbitConfig,
+							this.grid.getCellSize()
+						)
+					);
+				}
+			}
+			// Burst particles
+			for (let i = 0; i < particleCount - ringCount; i++) {
+				const angle = (i / (particleCount - ringCount)) * Math.PI * 2;
+				const burstConfig: PowerUpParticleConfig = {
+					type: 'powerup',
+					initialAngle: angle,
+					speed: config.speed * (1 + Math.random() * 0.5),
+					size: config.size,
+					lifetime: config.lifetime,
+					colors: config.colors,
+					trail: config.trail,
+					glow: true,
+					sparkle: true,
+					pulse: true,
+				};
+				if (validateParticleConfig(burstConfig)) {
+					this.particles.push(
+						new Particle(
+							this.p5,
+							center.x,
+							center.y,
+							burstConfig,
+							this.grid.getCellSize()
+						)
+					);
+				}
+			}
+		} else if (foodType === 'golden') {
+			// Explosive gold starburst with orbiting sparkles
+			for (let i = 0; i < particleCount; i++) {
+				const angle = (i / particleCount) * Math.PI * 2;
+				const speed = config.speed * (1 + Math.random() * 0.6);
+				const burstConfig: PowerUpParticleConfig = {
+					type: 'powerup',
+					initialAngle: angle,
+					speed,
+					size: config.size,
+					lifetime: config.lifetime,
+					colors: config.colors,
+					trail: config.trail,
+					glow: true,
+					sparkle: true,
+					pulse: true,
+				};
+				if (validateParticleConfig(burstConfig)) {
+					this.particles.push(
+						new Particle(
+							this.p5,
+							center.x,
+							center.y,
+							burstConfig,
+							this.grid.getCellSize()
+						)
+					);
+				}
+			}
+			const orbitCount = 6;
+			for (let i = 0; i < orbitCount; i++) {
+				const angle = (i / orbitCount) * Math.PI * 2;
+				const orbitConfig: PowerUpParticleConfig = {
+					type: 'orbit',
+					initialAngle: angle,
+					speed: config.speed * 0.4,
+					size: { min: config.size.min * 0.8, max: config.size.max * 0.8 },
+					lifetime: { min: config.lifetime.min * 1.5, max: config.lifetime.max * 1.5 },
+					colors: config.colors,
+					trail: config.trail,
+					glow: true,
+					sparkle: true,
+					pulse: true,
+					orbit: { enabled: true, radius: this.grid.getCellSize() * 1.5, speed: 0.08 },
+				};
+				if (validateParticleConfig(orbitConfig)) {
+					this.particles.push(
+						new Particle(
+							this.p5,
+							center.x,
+							center.y,
+							orbitConfig,
+							this.grid.getCellSize()
+						)
+					);
+				}
 			}
 		}
 	}

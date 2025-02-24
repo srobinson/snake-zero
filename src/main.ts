@@ -29,9 +29,15 @@ export default class Game implements SnakeGame {
 	private p5: p5 | null;
 	private particles: Particles | null;
 	private activePowerUps: Map<string, PowerUpBadge>;
+	private activeBadges: PowerUpBadge[];
 	private floatingBadges: PowerUpBadge[];
 	private animationFrameId: number | null = null;
 	private lastFrameTime: number = 0;
+
+	private scoreScale: number = 1; // Base scale for animation
+	private scoreWiggle: number = 0; // Wiggle offset
+	private scoreAnimationTime: number = 0; // Tracks animation duration
+	private readonly SCORE_ANIMATION_DURATION: number = 500; // 500ms animation
 
 	constructor() {
 		configManager.loadFromLocalStorage();
@@ -50,6 +56,7 @@ export default class Game implements SnakeGame {
 		this.particles = null;
 		this.activePowerUps = new Map();
 		this.floatingBadges = [];
+		this.activeBadges = [];
 
 		this.setupEventListeners();
 		this.setupResizeHandler();
@@ -69,7 +76,8 @@ export default class Game implements SnakeGame {
 					data.position,
 					foodColor,
 					data.points,
-					data.multiplier
+					data.multiplier,
+					data.foodType
 				);
 				// Respawn food after creating effect
 				this.food.respawn([this.snake]);
@@ -103,6 +111,17 @@ export default class Game implements SnakeGame {
 		});
 	}
 
+	private repositionBadges(): void {
+		const cellSize = this.grid.getCellSize();
+		const badgeSize = cellSize * (cellSize < 20 ? 2.0 : 1.2);
+		const badgeSpacing = cellSize * 0.4;
+		const margin = cellSize;
+
+		this.activeBadges.forEach((badge, index) => {
+			const newX = margin + index * (badgeSize + badgeSpacing);
+			badge.setPosition(newX, margin);
+		});
+	}
 	/**
 	 * Initializes p5.js canvas and setup.
 	 * @param {p5} p5 - p5.js instance
@@ -145,23 +164,14 @@ export default class Game implements SnakeGame {
 	 */
 	update(): void {
 		if (!this.stateMachine.isInState(GameStates.PLAYING)) return;
-
 		const currentTime = this.p5!.millis();
-
-		// Update debug panel
 		this.debugPanel.update(currentTime);
 
-		// Update snake
 		if (this.snake.update(currentTime)) {
-			// Check collisions after movement
 			if (this.snake.checkCollision()) {
-				this.events.emit(GameEvents.COLLISION, {
-					position: this.snake.segments[0], // Head position
-				});
+				this.events.emit(GameEvents.COLLISION, { position: this.snake.segments[0] });
 				return;
 			}
-
-			// Check food collision
 			if (this.snake.checkFoodCollision(this.food)) {
 				this.snake.grow();
 				const basePoints = this.food.getPoints();
@@ -172,29 +182,32 @@ export default class Game implements SnakeGame {
 					position: this.food.getPosition(),
 					points: basePoints,
 					multiplier: multiplier,
+					foodType: this.food.getType(),
 				});
 				this.events.emit(GameEvents.SCORE_CHANGED, {
 					score: this.stateMachine.getCurrentScore(),
 				});
+				this.scoreAnimationTime = currentTime;
 			}
-
-			// Check power-up collision
 			if (this.powerUp && this.snake.checkPowerUpCollision(this.powerUp)) {
-				this.snake.addEffect(this.powerUp.powerUpType);
-				this.applyPowerUp(this.powerUp.powerUpType, this.powerUp.currentPosition);
+				this.snake.addEffect(this.powerUp.type);
+				this.applyPowerUp(this.powerUp.type, this.powerUp.position); // Updated from currentPosition
 				this.events.emit(GameEvents.POWER_UP_COLLECTED, {
-					powerUpType: this.powerUp.powerUpType,
-					position: this.powerUp.currentPosition,
+					powerUpType: this.powerUp.type,
+					position: this.powerUp.position, // Updated from currentPosition
 				});
 				this.powerUp = null;
 			}
 		}
 
-		// Spawn power-up based on difficulty settings
 		const difficulty = this.config.difficulty.presets[this.config.difficulty.current];
 		if (!this.powerUp && Math.random() < difficulty.powerUpChance) {
 			this.powerUp = new PowerUp(this.grid, [this.snake, this.food]);
 		}
+
+		this.activeBadges = this.activeBadges.filter(badge => badge.update());
+		this.repositionBadges();
+		this.floatingBadges = this.floatingBadges.filter(badge => badge.update());
 	}
 
 	/**
@@ -258,12 +271,8 @@ export default class Game implements SnakeGame {
 			badge.draw();
 		}
 
-		// Draw floating badges at collection points
-		this.floatingBadges = this.floatingBadges.filter(badge => {
-			if (!badge.update()) return false;
-			badge.draw();
-			return true;
-		});
+		this.activeBadges.forEach(badge => badge.draw());
+		this.floatingBadges.forEach(badge => badge.draw());
 
 		this.drawScore();
 		this.debugPanel.draw(this.p5!);
@@ -345,10 +354,39 @@ export default class Game implements SnakeGame {
 	 */
 	private drawScore(): void {
 		const p5 = this.p5!;
-		p5.textAlign(p5.LEFT, p5.TOP);
-		p5.textSize(20);
-		p5.fill(255);
-		p5.text(`Score: ${this.stateMachine.getCurrentHighScore()}`, 10, 10, p5.millis());
+		p5.push();
+		p5.textFont('Press Start 2P'); // Arcade font
+		p5.textAlign(p5.CENTER, p5.TOP);
+		p5.textSize(80 * this.scoreScale); // Bold, scales instantly
+		p5.strokeWeight(4);
+		p5.stroke(0); // Black outline
+		p5.fill(255, 255, 255); // Bright yellow
+		p5.drawingContext.shadowBlur = 10;
+		p5.drawingContext.shadowColor = 'rgba(255, 255, 0, 0.8)';
+
+		const x = this.grid.getWidth() / 2 + this.scoreWiggle;
+		const y = 20;
+		p5.text(this.stateMachine.getCurrentScore(), x, y);
+
+		// Flash effect for immediacy
+		if (this.scoreAnimationTime > 0) {
+			const elapsed = p5.millis() - this.scoreAnimationTime;
+			if (elapsed < this.SCORE_ANIMATION_DURATION) {
+				const t = elapsed / this.SCORE_ANIMATION_DURATION;
+				p5.drawingContext.shadowBlur = 100;
+				// Quick scale back from 2 to 1
+				this.scoreScale = 1 + (2 - 1) * (1 - t * t); // Quadratic ease-out for snap
+				// Intense, fast shake that decays
+				this.scoreWiggle = 10 * (1 - t) * Math.sin(t * 40); // High frequency shake
+			} else {
+				this.scoreScale = 1;
+				this.scoreWiggle = 0;
+				this.scoreAnimationTime = 0;
+			}
+		}
+
+		p5.drawingContext.shadowBlur = 0;
+		p5.pop();
 	}
 
 	/**
@@ -456,17 +494,13 @@ export default class Game implements SnakeGame {
 	 * @param {Position} powerUpPosition - Power-up position
 	 */
 	applyPowerUp(type: PowerUpType, powerUpPosition: Position): void {
-		// Get powerup duration from config
-		// const duration = this.config.powerUps.effects[type].duration;
-
-		if (this.activePowerUps.has(type)) {
-			const badge = this.activePowerUps.get(type);
-			badge!.resetStartTime();
+		const existingBadgeIndex = this.activeBadges.findIndex(badge => badge.getType() === type);
+		if (existingBadgeIndex !== -1) {
+			const badge = this.activeBadges[existingBadgeIndex];
+			badge.resetStartTime(); // No position change
 		} else {
 			this.addPowerUpBadge(type, powerUpPosition);
 		}
-
-		// Create pop-in particle effect at snake's head
 		const position = this.snake.segments[0];
 		this.particles!.createPowerUpEffect(position, type);
 	}
@@ -479,80 +513,58 @@ export default class Game implements SnakeGame {
 	addPowerUpBadge(type: PowerUpType, powerUpPosition: Position): void {
 		const config = this.config.powerUps.badges;
 		const cellSize = this.grid.getCellSize();
-
-		// Scale factors based on cell size range (10-100px)
-		// const baseScale = Math.max(0.5, Math.min(1, cellSize / 50)); // Normalized to 50px cell size
-
-		// Calculate sizes with cell-size appropriate scaling
-		const badgeSize = cellSize * (cellSize < 20 ? 2.0 : 1.2); // Reduced multiplier for better fit
-		const floatingBadgeSize = cellSize * (cellSize < 20 ? 2.5 : 1.8); // Reduced floating badge size
-		const badgeSpacing = cellSize * 0.4; // Slightly reduced spacing
+		const badgeSize = cellSize * (cellSize < 20 ? 2.0 : 1.2);
+		const floatingBadgeSize = cellSize * (cellSize < 20 ? 2.5 : 1.8);
+		const badgeSpacing = cellSize * 0.4;
 		const margin = cellSize;
-
-		// Get powerup position in pixel coordinates
 		const powerUpPos = this.grid.getCellCenter(powerUpPosition);
 
-		// Create UI progress badge with effect-specific duration
-		const badgeCount = this.activePowerUps.size;
-		const effectDuration = this.config.powerUps.effects[type].duration;
-		const remainingDuration = this.snake.getEffectTimeRemaining(type);
-
-		const letPosX = margin + badgeCount * (badgeSize + badgeSpacing);
-
+		const initialX = margin + this.activeBadges.length * (badgeSize + badgeSpacing);
 		const uiBadge = new PowerUpBadge(
 			this.p5!,
 			type,
-			// {
-			// 	...this.config.powerUps.badges,
-			// 	duration: remainingDuration || effectDuration, // Use remaining duration if available
-			// 	size: badgeSize,
-			// 	hoverAmplitude: cellSize * this.config.powerUps.badges, // Reduced hover amplitude
-			// 	hoverFrequency: config?.hoverFrequency || 2, // Add default value
-			// },
 			{
 				...this.config.powerUps,
+				colors: this.config.powerUps.colors,
+				icons: this.config.powerUps.icons,
+				effects: this.config.powerUps.effects,
 				badges: {
-					...this.config.powerUps.badges,
-					duration: remainingDuration || effectDuration, // Use remaining duration if available
+					...config,
+					duration: this.config.powerUps.effects[type].duration,
 					size: badgeSize,
-					hoverAmplitude: cellSize * this.config.powerUps.badges.hoverAmplitude, // Reduced hover amplitude
-					hoverFrequency: config?.hoverFrequency || 2, // Add default value
+					hoverAmplitude: cellSize * config.hoverAmplitude,
+					hoverFrequency: config.hoverFrequency || 2,
+					popInDuration: config.popInDuration || 300,
+					popInScale: config.popInScale || 1.2,
 				},
 			},
-			letPosX,
-			margin,
-			false // isFloating = false
+			initialX, // Starts at final x position
+			margin, // y set in constructor to drop from above
+			false
 		);
-		this.activePowerUps.set(type, uiBadge);
+		console.log('Badge added:', type, 'total:', this.activeBadges.length + 1);
+		this.activeBadges.push(uiBadge);
 
-		// Create floating badge at collection point
 		const floatingBadge = new PowerUpBadge(
 			this.p5!,
 			type,
-			// {
-			// 	...config,
-			// 	duration: 1500,
-			// 	size: floatingBadgeSize,
-			// 	popInDuration: config?.popInDuration || 300, // Add default value
-			// 	popInScale: 1.5, // Larger pop scale for floating badge
-			// 	hoverAmplitude: cellSize * 0.1, // Slightly larger hover amplitude
-			// 	hoverFrequency: config?.hoverFrequency || 2, // Add default value
-			// },
 			{
 				...this.config.powerUps,
 				badges: {
-					...this.config.powerUps.badges,
+					...config,
 					duration: 1500,
 					size: floatingBadgeSize,
-					hoverAmplitude: cellSize * this.config.powerUps.badges.hoverAmplitude, // Reduced hover amplitude
-					hoverFrequency: config?.hoverFrequency || 2, // Add default value
+					hoverAmplitude: cellSize * config.hoverAmplitude,
+					hoverFrequency: config.hoverFrequency || 2,
 				},
 			},
 			powerUpPos.x,
 			powerUpPos.y,
-			true // isFloating = true
+			true
 		);
 		this.floatingBadges.push(floatingBadge);
+
+		this.repositionBadges(); // Sets targetX, no drop needed here
 	}
 
 	getSnake(): Snake {

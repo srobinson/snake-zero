@@ -46,7 +46,7 @@ export const GameStates = {
 } as const;
 
 /** Valid state transitions map */
-export const VALID_TRANSITIONS: Record<GameState, GameState[]> = {
+export const ValidTransitions: Record<GameState, GameState[]> = {
 	[GameStates.MENU]: [GameStates.PLAYING],
 	[GameStates.PLAYING]: [GameStates.PAUSED, GameStates.GAME_OVER],
 	[GameStates.PAUSED]: [GameStates.PLAYING, GameStates.MENU],

@@ -18,6 +18,8 @@ export interface SnakeGame {
 	setConfig(config: GameConfig): void;
 	updatePowerUp(powerUp: PowerUp | null): void;
 
+	getCurrentScore(): number;
+
 	// Game state methods
 	recreate(): boolean;
 	reset(): void;

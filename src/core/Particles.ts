@@ -1,4 +1,5 @@
-import p5 from 'p5';
+// Particles.ts
+import type p5 from 'p5';
 import type { SnakeGame } from '../types';
 import type {
 	ActiveEffectParticleConfig,
@@ -8,7 +9,7 @@ import type {
 	PowerUpParticleConfig,
 	ScoreParticleConfig,
 } from '../config/types';
-import { Grid } from '../entities/types';
+import type { Grid } from '../entities/types';
 import { Particle } from '../entities/Particle';
 import { effectsConfig } from '../config/effectsConfig';
 import { validateParticleConfig } from '../config/particleConfig';
@@ -20,6 +21,7 @@ class Particles {
 	private particles: Particle[];
 	private activeEffects: Map<string, EffectConfig>;
 	private lastEffectTime: Map<string, number>;
+	private particlePool: ParticlePool;
 
 	constructor(p5: p5, grid: Grid, game: SnakeGame) {
 		this.p5 = p5;
@@ -28,15 +30,9 @@ class Particles {
 		this.particles = [];
 		this.activeEffects = new Map();
 		this.lastEffectTime = new Map();
+		this.particlePool = new ParticlePool(p5, grid, game, 50);
 	}
 
-	/**
-	 * Creates a particle effect when food is collected
-	 * @param position - Grid position where the food was collected
-	 * @param color - Color of the food that was collected
-	 * @param score - Base score value of the food (before multipliers)
-	 * @param multiplier - Current points multiplier from active effects
-	 */
 	createFoodEffect(
 		position: Position,
 		color: string,
@@ -47,8 +43,8 @@ class Particles {
 		const center = this.grid.getCellCenter(position);
 		const finalScore = score * multiplier;
 		const config = effectsConfig.particles.food[foodType];
+		const cellSize = this.grid.getCellSize();
 
-		// Score text particle
 		const scoreParticleConfig: ScoreParticleConfig = {
 			type: 'score',
 			speed: 3,
@@ -62,25 +58,19 @@ class Particles {
 			score: finalScore,
 			text: finalScore.toString(),
 			font: 'Bangers',
-			fontSize: this.grid.getCellSize() * (foodType === 'golden' ? 3 : 2),
+			fontSize: cellSize * (foodType === 'golden' ? 3 : 2),
 		};
 		if (validateParticleConfig(scoreParticleConfig)) {
-			this.particles.push(
-				new Particle(
-					this.p5,
-					center.x,
-					center.y,
-					scoreParticleConfig,
-					this.grid.getCellSize()
-				)
-			);
+			const scoreParticle = this.particlePool.get(cellSize);
+			scoreParticle.initialize(scoreParticleConfig);
+			scoreParticle.x = center.x;
+			scoreParticle.y = center.y;
+			this.particles.push(scoreParticle);
 		}
 
-		// Type-specific particle effects
 		const particleCount = Math.min(40, config.count + Math.floor(finalScore / 5));
 
 		if (foodType === 'regular') {
-			// Quick red sparkle burst
 			for (let i = 0; i < particleCount; i++) {
 				const angle = (i / particleCount) * Math.PI * 2;
 				const speed = config.speed * (0.8 + Math.random() * 0.4);
@@ -97,19 +87,14 @@ class Particles {
 					pulse: false,
 				};
 				if (validateParticleConfig(burstConfig)) {
-					this.particles.push(
-						new Particle(
-							this.p5,
-							center.x,
-							center.y,
-							burstConfig,
-							this.grid.getCellSize()
-						)
-					);
+					const particle = this.particlePool.get(cellSize);
+					particle.initialize(burstConfig);
+					particle.x = center.x;
+					particle.y = center.y;
+					this.particles.push(particle);
 				}
 			}
 		} else if (foodType === 'bonus') {
-			// Swirling magenta rings
 			const ringCount = Math.floor(particleCount / 3);
 			for (let i = 0; i < ringCount; i++) {
 				const angle = (i / ringCount) * Math.PI * 2;
@@ -126,23 +111,18 @@ class Particles {
 					pulse: true,
 					orbit: {
 						enabled: true,
-						radius: this.grid.getCellSize() * (1 + i * 0.2),
+						radius: cellSize * (1 + i * 0.2),
 						speed: 0.1,
 					},
 				};
 				if (validateParticleConfig(orbitConfig)) {
-					this.particles.push(
-						new Particle(
-							this.p5,
-							center.x,
-							center.y,
-							orbitConfig,
-							this.grid.getCellSize()
-						)
-					);
+					const particle = this.particlePool.get(cellSize);
+					particle.initialize(orbitConfig, center.x, center.y); // FIX: Pass center for orbiting
+					particle.x = center.x;
+					particle.y = center.y;
+					this.particles.push(particle);
 				}
 			}
-			// Burst particles
 			for (let i = 0; i < particleCount - ringCount; i++) {
 				const angle = (i / (particleCount - ringCount)) * Math.PI * 2;
 				const burstConfig: PowerUpParticleConfig = {
@@ -158,19 +138,14 @@ class Particles {
 					pulse: true,
 				};
 				if (validateParticleConfig(burstConfig)) {
-					this.particles.push(
-						new Particle(
-							this.p5,
-							center.x,
-							center.y,
-							burstConfig,
-							this.grid.getCellSize()
-						)
-					);
+					const particle = this.particlePool.get(cellSize);
+					particle.initialize(burstConfig);
+					particle.x = center.x;
+					particle.y = center.y;
+					this.particles.push(particle);
 				}
 			}
 		} else if (foodType === 'golden') {
-			// Explosive gold starburst with orbiting sparkles
 			for (let i = 0; i < particleCount; i++) {
 				const angle = (i / particleCount) * Math.PI * 2;
 				const speed = config.speed * (1 + Math.random() * 0.6);
@@ -187,15 +162,11 @@ class Particles {
 					pulse: true,
 				};
 				if (validateParticleConfig(burstConfig)) {
-					this.particles.push(
-						new Particle(
-							this.p5,
-							center.x,
-							center.y,
-							burstConfig,
-							this.grid.getCellSize()
-						)
-					);
+					const particle = this.particlePool.get(cellSize);
+					particle.initialize(burstConfig);
+					particle.x = center.x;
+					particle.y = center.y;
+					this.particles.push(particle);
 				}
 			}
 			const orbitCount = 6;
@@ -212,37 +183,26 @@ class Particles {
 					glow: true,
 					sparkle: true,
 					pulse: true,
-					orbit: { enabled: true, radius: this.grid.getCellSize() * 1.5, speed: 0.08 },
+					orbit: { enabled: true, radius: cellSize * 1.5, speed: 0.08 },
 				};
 				if (validateParticleConfig(orbitConfig)) {
-					this.particles.push(
-						new Particle(
-							this.p5,
-							center.x,
-							center.y,
-							orbitConfig,
-							this.grid.getCellSize()
-						)
-					);
+					const particle = this.particlePool.get(cellSize);
+					particle.initialize(orbitConfig, center.x, center.y); // FIX: Pass center for orbiting
+					particle.x = center.x;
+					particle.y = center.y;
+					this.particles.push(particle);
 				}
 			}
 		}
 	}
 
-	/**
-	 * Creates a power-up collection effect
-	 * @param position - Grid position of the power-up
-	 * @param type - Type of power-up
-	 */
 	createPowerUpEffect(position: Position, type: string): void {
 		const center = this.grid.getCellCenter(position);
 		const config = effectsConfig.particles.powerUps[type];
 		const cellSize = this.grid.getCellSize();
 
-		// Create burst particles
 		for (let i = 0; i < config.particleCount; i++) {
 			const angle = (i / config.particleCount) * Math.PI * 2;
-
 			const powerUpParticleConfig: PowerUpParticleConfig = {
 				type: 'powerup',
 				initialAngle: angle,
@@ -252,37 +212,26 @@ class Particles {
 					max: config.sizeRange[1] / cellSize,
 				},
 				lifetime: config.duration
-					? {
-							min: config.duration * 0.8,
-							max: config.duration,
-						}
-					: {
-							min: 1000,
-							max: 1500,
-						},
+					? { min: config.duration * 0.8, max: config.duration }
+					: { min: 1000, max: 1500 },
 				colors: config.colors || ['#ffffff'],
-				trail: {
-					enabled: true,
-				},
+				trail: { enabled: true },
 				glow: true,
 				sparkle: true,
 				pulse: false,
 			};
-
-			// Validate configuration before creating particle
 			if (validateParticleConfig(powerUpParticleConfig)) {
-				this.particles.push(
-					new Particle(this.p5, center.x, center.y, powerUpParticleConfig, cellSize)
-				);
+				const particle = this.particlePool.get(cellSize);
+				particle.initialize(powerUpParticleConfig);
+				particle.x = center.x;
+				particle.y = center.y;
+				this.particles.push(particle);
 			}
 		}
 
-		// Add orbital particles
 		const orbitCount = 8;
-
 		for (let i = 0; i < orbitCount; i++) {
 			const angle = (i / orbitCount) * Math.PI * 2;
-
 			const orbitParticleConfig: PowerUpParticleConfig = {
 				type: 'orbit',
 				initialAngle: angle,
@@ -292,42 +241,25 @@ class Particles {
 					max: (config.sizeRange[1] * 0.8) / cellSize,
 				},
 				lifetime: config.duration
-					? {
-							min: config.duration * 1.2,
-							max: config.duration * 1.5,
-						}
-					: {
-							min: 1000,
-							max: 1500,
-						},
+					? { min: config.duration * 1.2, max: config.duration * 1.5 }
+					: { min: 1000, max: 1500 },
 				colors: config.colors || ['#ffffff'],
-				trail: {
-					enabled: true,
-				},
+				trail: { enabled: true },
 				glow: true,
 				sparkle: true,
 				pulse: false,
-				orbit: {
-					enabled: true,
-					radius: cellSize * 1.2,
-					speed: 0.05,
-				},
+				orbit: { enabled: true, radius: cellSize * 1.2, speed: 0.05 },
 			};
-
-			// Validate configuration before creating particle
 			if (validateParticleConfig(orbitParticleConfig)) {
-				this.particles.push(
-					new Particle(this.p5, center.x, center.y, orbitParticleConfig, cellSize)
-				);
+				const particle = this.particlePool.get(cellSize);
+				particle.initialize(orbitParticleConfig, center.x, center.y); // FIX: Pass center for orbiting
+				particle.x = center.x;
+				particle.y = center.y;
+				this.particles.push(particle);
 			}
 		}
 	}
 
-	/**
-	 * Updates and manages active particle effects
-	 * @param type - Type of active effect
-	 * @param position - Grid position of the effect
-	 */
 	updateActiveEffect(type: string, position: Position): void {
 		const now = this.p5.millis();
 		const activeEffects = effectsConfig.particles.activeEffects || {};
@@ -339,22 +271,18 @@ class Particles {
 			sizeRange: [5, 10],
 			spreadAngle: 45,
 			colors: ['#ffffff'],
-			trail: {
-				enabled: true,
-			},
+			trail: { enabled: true },
 			sparkle: true,
 		};
 		const lastTime = this.lastEffectTime.get(type) || 0;
 
-		// Check if it's time to emit new particles
 		if (now - lastTime >= (config.emitInterval || 500)) {
 			const center = this.grid.getCellCenter(position);
 			const cellSize = this.grid.getCellSize();
 
-			// Create new particles
 			for (let i = 0; i < (config.particleCount || 10); i++) {
 				const spreadRad = ((config.spreadAngle || 45) * Math.PI) / 180;
-				const baseAngle = -Math.PI / 2; // Upward direction
+				const baseAngle = -Math.PI / 2;
 				const angle = baseAngle - spreadRad / 2 + Math.random() * spreadRad;
 
 				const activeEffectParticleConfig: ActiveEffectParticleConfig = {
@@ -372,25 +300,18 @@ class Particles {
 						max: (config.emitInterval || 500) * 3,
 					},
 					colors: config.colors || ['#ffffff'],
-					trail: {
-						enabled: true,
-					},
+					trail: { enabled: true },
 					glow: true,
 					sparkle: true,
 					pulse: false,
 				};
 
-				// Validate configuration before creating particle
 				if (validateParticleConfig(activeEffectParticleConfig)) {
-					this.particles.push(
-						new Particle(
-							this.p5,
-							center.x,
-							center.y,
-							activeEffectParticleConfig,
-							cellSize
-						)
-					);
+					const particle = this.particlePool.get(cellSize);
+					particle.initialize(activeEffectParticleConfig);
+					particle.x = center.x;
+					particle.y = center.y;
+					this.particles.push(particle);
 				}
 			}
 
@@ -398,24 +319,53 @@ class Particles {
 		}
 	}
 
-	/**
-	 * Updates all particles in the system
-	 */
 	update(): void {
-		// Update and draw all particles
 		this.particles = this.particles.filter(particle => {
-			return particle.update();
+			const alive = particle.update();
+			if (!alive) {
+				this.particlePool.recycle(particle);
+			}
+			return alive;
 		});
 	}
 
-	/**
-	 * Draws all particles in the system
-	 */
 	draw(): void {
-		// Draw all particles
 		for (const particle of this.particles) {
 			particle.draw();
 		}
+	}
+}
+
+class ParticlePool {
+	private p5: p5;
+	private grid: Grid;
+	private game: SnakeGame;
+	private pool: Particle[];
+	private initialSize: number;
+
+	constructor(p5: p5, grid: Grid, game: SnakeGame, initialSize: number) {
+		this.p5 = p5;
+		this.grid = grid;
+		this.game = game;
+		this.initialSize = initialSize;
+		this.pool = [];
+		for (let i = 0; i < initialSize; i++) {
+			this.pool.push(new Particle(this.p5));
+		}
+	}
+
+	get(cellSize: number): Particle {
+		if (this.pool.length === 0) {
+			this.pool.push(new Particle(this.p5));
+		}
+		const particle = this.pool.pop()!;
+		particle.cellSize = cellSize;
+		return particle;
+	}
+
+	recycle(particle: Particle): void {
+		particle.reset();
+		this.pool.push(particle);
 	}
 }
 

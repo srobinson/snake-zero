@@ -109,7 +109,7 @@ export class Food {
 		return [this.position];
 	}
 
-	public respawn(obstacles: Obstacle[] = []): void {
+	public respawn(obstacles: Obstacle[] = [], type?: FoodType): void {
 		let newPosition: Position;
 		let attempts = 0;
 		const maxAttempts = 100;
@@ -132,7 +132,7 @@ export class Food {
 		}
 
 		this.position = newPosition;
-		this.type = this.getRandomType();
+		this.type = type || this.getRandomType();
 		this.color = this.config.colors[this.type].primary!;
 		this.spawnTime = Date.now();
 

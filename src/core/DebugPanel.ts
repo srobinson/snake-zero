@@ -1,45 +1,13 @@
 import configManager from '../config/gameConfig';
 import { PowerUp } from '../entities/PowerUp';
 import { SnakeGame } from '../types';
-import { BoardPreset } from '../config/types';
-
-type DebugConfig = {
-	enabled: boolean;
-	shortcutKey: string | string[];
-	fontSize: number;
-	position: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
-	padding: number;
-	backgroundColor: string;
-	textColor: string;
-	showFPS: boolean;
-	showSnakeInfo: boolean;
-	showGridInfo: boolean;
-	showEffects: boolean;
-	showControls: boolean;
-	controls: {
-		grid: {
-			increaseCellSize: string;
-			decreaseCellSize: string;
-		};
-		spawn: {
-			speed: string;
-			ghost: string;
-			points: string;
-			slow: string;
-		};
-		snake: {
-			grow: string;
-		};
-		board: Record<BoardPreset, string>;
-	};
-};
+import { BoardPreset, DebugConfig } from '../config/types';
+import { Food } from '../entities/Food'; // Ensure Food is imported
 
 export class DebugPanel {
 	private game: SnakeGame;
 	private config: DebugConfig;
-	private enabled: boolean;
 	private visible: boolean;
-	private lastFrameTime: number;
 	private frameCount: number;
 	private fps: number;
 	private fpsUpdateInterval: number;
@@ -49,8 +17,6 @@ export class DebugPanel {
 		this.game = game;
 		this.config = configManager.getConfig().debug;
 		this.visible = this.config.enabled;
-		this.enabled = this.config.enabled;
-		this.lastFrameTime = 0;
 		this.frameCount = 0;
 		this.fps = 0;
 		this.fpsUpdateInterval = 500;
@@ -84,6 +50,15 @@ export class DebugPanel {
 		for (const type of powerUpTypes) {
 			if (spawnControls[type] === key) {
 				this.spawnPowerUp(type);
+				return true;
+			}
+		}
+
+		const foodControls = this.config.controls.food;
+		const foodTypes = ['regular', 'bonus', 'golden'] as const;
+		for (const type of foodTypes) {
+			if (foodControls[type] === key) {
+				this.game.getFood().respawn([this.game.getSnake()], type);
 				return true;
 			}
 		}
@@ -227,7 +202,7 @@ export class DebugPanel {
 			currentY += lineHeight;
 			p5.text(`Speed: ${currentSpeed.toFixed(1)}`, x + this.config.padding, currentY);
 			currentY += lineHeight;
-			p5.text(`Score: ${snake.score}`, x + this.config.padding, currentY);
+			p5.text(`Score: ${this.game.getCurrentScore()}`, x + this.config.padding, currentY);
 			currentY += lineHeight;
 		}
 

@@ -1,41 +1,23 @@
+// src/core/GameController.ts
 import type { SnakeGame } from '../types';
 import type { StateTransition, StateData } from './types';
 import { EventSystem } from './EventSystem';
 import { GameStates, GameState, ValidTransitions } from './types';
-import { GameEvents } from '../config/types';
+import { GameEvents, ScoreChangedEventData, StateChangedEventData } from '../config/types';
+
 /**
- * Game state machine that handles state transitions and associated logic.
- * Manages the game's state lifecycle, including:
- * - State transitions and validation
- * - Score tracking and high score persistence
- * - Game timing and pause functionality
+ * Game state machine managing state transitions and core game metrics.
+ * Tracks scores, high scores, and play time, emitting type-safe events.
  */
 export class GameController {
-	/** Current game state */
 	private state: GameState;
-
-	/** Game start time */
 	private startTime: number;
-
-	/** Pause time */
 	private pauseTime: number;
-
-	/** Current score */
 	private score: number;
-
-	/** High score */
 	private highScore: number;
-
-	/** Game instance */
 	private game: SnakeGame;
-
-	/** Event system */
 	private events: EventSystem;
 
-	/**
-	 * Creates a new GameController instance
-	 * @param game - The game instance
-	 */
 	constructor(game: SnakeGame) {
 		this.game = game;
 		this.state = GameStates.MENU;
@@ -46,23 +28,12 @@ export class GameController {
 		this.events = game.getEvents();
 	}
 
-	/**
-	 * Validates a state transition
-	 * @param transition - The transition to validate
-	 * @returns Whether the transition is valid
-	 */
 	private validateTransition({ from, to }: StateTransition): boolean {
 		return ValidTransitions[from]?.includes(to) ?? false;
 	}
 
-	/**
-	 * Creates state data for event emission
-	 * @param state - The state to create data for
-	 * @returns State data for event
-	 */
-	private createStateData(state: GameState): StateData {
-		const data: StateData = { state };
-
+	private createStateData(state: GameState): StateChangedEventData {
+		const data: StateChangedEventData = { state };
 		switch (state) {
 			case GameStates.GAME_OVER:
 				data.score = this.score;
@@ -73,27 +44,16 @@ export class GameController {
 				data.playTime = this.getPlayTime();
 				break;
 		}
-
 		return data;
 	}
 
-	/**
-	 * Transitions to a new state if the transition is valid
-	 * @param newState - The state to transition to
-	 * @returns Whether the transition was successful
-	 */
-	transition(newState: GameState): boolean {
-		const transition: StateTransition = {
-			from: this.state,
-			to: newState,
-		};
-
+	public transition(newState: GameState): boolean {
+		const transition: StateTransition = { from: this.state, to: newState };
 		if (!this.validateTransition(transition)) {
 			console.warn(`Invalid state transition: ${transition.from} -> ${transition.to}`);
 			return false;
 		}
 
-		// Handle state exit
 		switch (this.state) {
 			case GameStates.PLAYING:
 				if (newState === GameStates.PAUSED) {
@@ -102,7 +62,6 @@ export class GameController {
 				break;
 		}
 
-		// Handle state enter
 		switch (newState) {
 			case GameStates.PLAYING:
 				if (this.state === GameStates.MENU) {
@@ -123,79 +82,46 @@ export class GameController {
 		}
 
 		this.state = newState;
-		this.events.emit('state_changed', this.createStateData(newState));
+		this.events.emit(GameEvents.STATE_CHANGED, this.createStateData(newState));
 		return true;
 	}
 
-	/**
-	 * Updates the current score
-	 * @param points - Points to add to the current score
-	 */
-	updateScore(points: number): void {
-		// if (!this.isInState(GameStates.PLAYING)) return;
-		// this.score += points;
-		// this.events.emit(GameEvents.SCORE_CHANGED, { score: this.score });
+	public updateScore(points: number): void {
 		this.score += points;
 		const highScore = parseInt(localStorage.getItem('highScore') || '0', 10);
 		if (this.score > highScore) {
 			localStorage.setItem('highScore', this.score.toString());
 		}
+		const scoreData: ScoreChangedEventData = { score: this.score };
+		this.events.emit(GameEvents.SCORE_CHANGED, scoreData);
 	}
 
-	/**
-	 * Loads the high score from local storage
-	 * @returns Stored high score or 0
-	 */
 	#loadHighScore(): number {
 		const storedHighScore = localStorage.getItem('highScore');
 		return storedHighScore ? parseInt(storedHighScore, 10) : 0;
 	}
 
-	/**
-	 * Saves the high score to local storage
-	 */
 	private saveHighScore(): void {
 		localStorage.setItem('highScore', this.highScore.toString());
 	}
 
-	/**
-	 * Checks if the game is in a specific state
-	 * @param state - State to check
-	 * @returns True if game is in the specified state
-	 */
-	isInState(state: GameState): boolean {
+	public isInState(state: GameState): boolean {
 		return this.state === state;
 	}
 
-	/**
-	 * Gets the current game state
-	 * @returns Current state
-	 */
-	getState(): GameState {
+	public getState(): GameState {
 		return this.state;
 	}
 
-	/**
-	 * Gets the current score
-	 * @returns Current score
-	 */
-	getCurrentScore(): number {
+	public getCurrentScore(): number {
 		return this.score;
 	}
 
-	/**
-	 * Gets the current high score
-	 * @returns Current high score
-	 */
-	getCurrentHighScore(): number {
+	public getCurrentHighScore(): number {
 		return this.highScore;
 	}
 
-	/**
-	 * Calculates the total play time
-	 * @returns Play time in milliseconds
-	 */
-	getPlayTime(): number {
+	public getPlayTime(): number {
 		if (this.state === GameStates.PLAYING) {
 			return Date.now() - this.startTime;
 		}

@@ -1,25 +1,28 @@
-import { GameEvent, EventData, EventCallback } from '../config/types';
+// src/core/EventSystem.ts
+import { GameEvent, EventDataMap, EventCallback } from '../config/types';
 
 /**
- * Simple event system for game events.
- * Provides a pub/sub interface for game components to communicate.
- * Handles event subscribe, unsubscribe, and emission with error handling.
+ * Type-safe event system for game events.
+ * Provides a pub/sub interface with generic event handling for precise data typing.
  */
 export class EventSystem {
-	/** Map of event listeners */
-	private listeners: Map<GameEvent, Set<EventCallback>>;
+	/** Map of event listeners, using Sets for efficient callback management */
+	private listeners: Map<GameEvent, Set<EventCallback<any>>>;
 
+	/**
+	 * Initializes the event system with an empty listener map.
+	 */
 	constructor() {
 		this.listeners = new Map();
 	}
 
 	/**
-	 * Subscribe to an event
-	 * @param event - Event to subscribe to
-	 * @param callback - Callback to execute when event is emitted
-	 * @returns Unsubscribe function that removes the callback when called
+	 * Subscribes to a specific game event with a typed callback.
+	 * @param event - Event to listen for
+	 * @param callback - Callback function receiving event-specific data
+	 * @returns Function to unsubscribe the callback
 	 */
-	on(event: GameEvent, callback: EventCallback): () => void {
+	public on<T extends GameEvent>(event: T, callback: EventCallback<T>): () => void {
 		if (!this.listeners.has(event)) {
 			this.listeners.set(event, new Set());
 		}
@@ -30,32 +33,31 @@ export class EventSystem {
 	}
 
 	/**
-	 * Unsubscribe from an event
+	 * Unsubscribes a callback from a specific game event.
 	 * @param event - Event to unsubscribe from
 	 * @param callback - Callback to remove
 	 */
-	off(event: GameEvent, callback: EventCallback): void {
+	public off<T extends GameEvent>(event: T, callback: EventCallback<T>): void {
 		const callbacks = this.listeners.get(event);
 		if (callbacks) {
 			callbacks.delete(callback);
 			if (callbacks.size === 0) {
-				this.listeners.delete(event);
+				this.listeners.delete(event); // Clean up empty event sets
 			}
 		}
 	}
 
 	/**
-	 * Emit an event with data
+	 * Emits a game event with type-specific data to all listeners.
 	 * @param event - Event to emit
-	 * @param data - Data to pass to callbacks
-	 * @throws If a callback throws an error, it will be caught and logged
+	 * @param data - Data matching the event type
 	 */
-	emit(event: GameEvent, data: EventData): void {
+	public emit<T extends GameEvent>(event: T, data: EventDataMap[T]): void {
 		const callbacks = this.listeners.get(event);
 		if (callbacks) {
 			callbacks.forEach(callback => {
 				try {
-					callback(data);
+					(callback as EventCallback<T>)(data); // Type-safe cast
 				} catch (error) {
 					console.error(`Error in event listener for ${event}:`, error);
 				}
@@ -64,10 +66,10 @@ export class EventSystem {
 	}
 
 	/**
-	 * Clear all event listeners.
-	 * Useful for cleanup or resetting the event system.
+	 * Clears all event listeners across all events.
+	 * Useful for cleanup or resetting the system.
 	 */
-	clear(): void {
+	public clear(): void {
 		this.listeners.clear();
 	}
 }

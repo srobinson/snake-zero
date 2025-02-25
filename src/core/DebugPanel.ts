@@ -1,8 +1,8 @@
+import type P5 from 'p5';
 import configManager from '../config/gameConfig';
 import { PowerUp } from '../entities/PowerUp';
 import { SnakeGame } from '../types';
 import { BoardPreset, DebugConfig } from '../config/types';
-import { Food } from '../entities/Food'; // Ensure Food is imported
 
 export class DebugPanel {
 	private game: SnakeGame;
@@ -123,7 +123,7 @@ export class DebugPanel {
 		}
 	}
 
-	draw(p5: any) {
+	draw(p5: P5) {
 		if (!this.visible) return;
 
 		p5.push();

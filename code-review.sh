@@ -6,7 +6,7 @@ REPO_NAME="snake-zero"
 BRANCH="main" # Change this if you're using a different branch
 
 # Base URL for GitHub
-GITHUB_BASE_URL="https://github.com/$GITHUB_USER/$REPO_NAME/blob/$BRANCH"
+GITHUB_BASE_URL="https://raw.githubusercontent.com/$GITHUB_USER/$REPO_NAME/refs/heads/$BRANCH"
 
 # Directory to scan
 SRC_DIR="./src"

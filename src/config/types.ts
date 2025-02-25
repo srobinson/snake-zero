@@ -266,6 +266,12 @@ export interface DebugControls {
 		/** Key to spawn slow power-up */
 		slow: string;
 	};
+	/** Food controls */
+	food: {
+		regular: string;
+		bonus: string;
+		golden: string;
+	};
 	/** Snake controls */
 	snake: {
 		/** Key to grow snake */

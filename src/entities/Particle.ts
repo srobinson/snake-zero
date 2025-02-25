@@ -1,34 +1,32 @@
-import p5 from 'p5';
-import { ParticleConfigType, ParticleType } from '../config/types';
-import { TrailPoint } from '../core/types';
+// Particle.ts
+import type p5 from 'p5';
+import type { ParticleConfigType, ParticleType } from '../config/types';
+import type { TrailPoint } from '../core/types';
 
 export class Particle {
 	private p5: p5;
 	public x: number;
 	public y: number;
-	private cellSize: number;
+	public cellSize: number;
 	private birth: number;
 	private type: ParticleType;
+	private active: boolean;
 
-	// Movement properties
 	private vx: number = 0;
 	private vy: number = 0;
 	private speed: number = 0;
 	private rotation: number = 0;
 
-	// Visual properties
 	private size: number = 0;
 	private color: string = '#ffffff';
 	private lifetime: number = 0;
 	private scale: number = 0;
 	private targetScale: number = 0;
 
-	// Trail properties
 	private trailPoints: Array<TrailPoint> = [];
 	private trailLength: number;
 	private trailDecay: number;
 
-	// Effect flags
 	private trail: boolean;
 	private glow: boolean;
 	private sparkle: boolean;
@@ -37,39 +35,107 @@ export class Particle {
 	private orbit: boolean;
 	private isRainbow: boolean;
 
-	// Sparkle and pulse properties
 	private sparkleTime: number = 0;
 	private pulsePhase: number;
 	private spiralAngle: number = 0;
 	private rotationSpeed: number;
 
-	// Orbital properties
 	private orbitCenter?: { x: number; y: number };
 	private orbitRadius?: number;
 	private orbitSpeed?: number;
 	private orbitAngle?: number;
 
-	// Gravity
 	private gravity: number;
 
-	// Optional score-specific properties
 	private score?: number;
 	private text?: string;
 	private font?: string;
 	private fontSize?: number;
 
-	constructor(p5: p5, x: number, y: number, config: ParticleConfigType, cellSize: number) {
+	constructor(
+		p5: p5,
+		x: number = 0,
+		y: number = 0,
+		config: ParticleConfigType = {
+			type: 'normal',
+			speed: 0,
+			size: { min: 0, max: 0 },
+			colors: ['#ffffff'],
+		},
+		cellSize: number = 1
+	) {
 		this.p5 = p5;
 		this.x = x;
 		this.y = y;
 		this.cellSize = cellSize;
 		this.birth = p5.millis();
 		this.type = config.type || 'normal';
+		this.active = false;
 
-		// Calculate scale factor based on cell size
-		const baseScale = Math.max(0.3, Math.min(1, cellSize / 40));
+		this.trailPoints = [];
+		this.trailLength = 0;
+		this.trailDecay = 0;
+		this.trail = false;
+		this.glow = false;
+		this.sparkle = false;
+		this.pulse = false;
+		this.spiral = false;
+		this.orbit = false;
+		this.isRainbow = false;
+		this.sparkleTime = 0;
+		this.pulsePhase = 0;
+		this.spiralAngle = 0;
+		this.rotationSpeed = 0;
+		this.gravity = 0;
 
-		// Score specific properties
+		this.initialize(config); // Initial setup
+	}
+
+	public reset(): void {
+		this.x = 0;
+		this.y = 0;
+		this.vx = 0;
+		this.vy = 0;
+		this.speed = 0;
+		this.rotation = 0;
+		this.size = 0;
+		this.color = '#ffffff';
+		this.lifetime = 0;
+		this.scale = 0;
+		this.targetScale = 0;
+		this.trailPoints = [];
+		this.trailLength = 0;
+		this.trailDecay = 0;
+		this.trail = false;
+		this.glow = false;
+		this.sparkle = false;
+		this.pulse = false;
+		this.spiral = false;
+		this.orbit = false;
+		this.isRainbow = false;
+		this.sparkleTime = 0;
+		this.pulsePhase = 0;
+		this.spiralAngle = 0;
+		this.rotationSpeed = 0;
+		this.orbitCenter = undefined;
+		this.orbitRadius = undefined;
+		this.orbitSpeed = undefined;
+		this.orbitAngle = undefined;
+		this.gravity = 0;
+		this.score = undefined;
+		this.text = undefined;
+		this.font = undefined;
+		this.fontSize = undefined;
+		this.active = false;
+	}
+
+	public initialize(config: ParticleConfigType, centerX?: number, centerY?: number): void {
+		this.birth = this.p5.millis();
+		this.type = config.type || 'normal';
+		this.active = true;
+
+		const baseScale = Math.max(0.3, Math.min(1, this.cellSize / 40));
+
 		if (this.type === 'score') {
 			this.score = config.score;
 			this.text = config.text;
@@ -77,15 +143,12 @@ export class Particle {
 			this.fontSize = (config.fontSize || 0) * baseScale;
 			this.scale = 0;
 			this.targetScale = 1.3 * baseScale;
-			this.rotation = p5.random(-0.2, 0.2);
+			this.rotation = this.p5.random(-0.2, 0.2);
 			this.vy = -(config.speed || 0) * baseScale;
 		}
 
-		// Initialize movement
 		const angle =
 			config.initialAngle !== undefined ? config.initialAngle : Math.random() * Math.PI * 2;
-
-		// Calculate speed
 		const speedValue =
 			typeof config.speed === 'number'
 				? config.speed
@@ -98,22 +161,18 @@ export class Particle {
 				? this.vy || -(config.speed || 0) * baseScale
 				: Math.sin(angle) * this.speed;
 
-		// Visual properties
 		this.size =
-			cellSize *
+			this.cellSize *
 			(config.size.min + Math.random() * (config.size.max - config.size.min)) *
 			baseScale;
 
-		// Calculate lifetime
 		const lifetimeMin = config.lifetime?.min ?? 500;
 		const lifetimeMax = config.lifetime?.max ?? 1500;
 		this.lifetime = lifetimeMin + Math.random() * (lifetimeMax - lifetimeMin);
 
-		// Ensure color is a valid hex color with alpha
 		const color = config.colors[Math.floor(Math.random() * config.colors.length)];
 		this.color = color.startsWith('#') ? color : '#ffffff';
 
-		// Effect flags
 		this.trail = config.trail?.enabled || false;
 		this.glow = config.glow || false;
 		this.sparkle = config.sparkle || false;
@@ -122,7 +181,6 @@ export class Particle {
 		this.orbit = config.orbit?.enabled || false;
 		this.isRainbow = config.rainbow || false;
 
-		// Effect properties
 		this.trailPoints = [];
 		this.trailLength = config.trail?.length || 3;
 		this.trailDecay = config.trail?.decay || 0.95;
@@ -131,29 +189,28 @@ export class Particle {
 		this.spiralAngle = 0;
 		this.rotationSpeed = (Math.random() * 0.1 + 0.05) * (Math.random() < 0.5 ? 1 : -1);
 
-		// Orbital properties
 		if (this.orbit) {
-			this.orbitCenter = { x, y };
+			// FIX: Use provided centerX, centerY for orbitCenter if available
+			this.orbitCenter = { x: centerX ?? this.x, y: centerY ?? this.y };
 			this.orbitRadius = config.orbit?.radius;
 			this.orbitSpeed = config.orbit?.speed;
 			this.orbitAngle = angle;
 		}
 
-		// Apply gravity if specified
 		this.gravity = config.gravity || 0;
 	}
 
 	update(): boolean {
+		if (!this.active) return false;
+
 		const p5 = this.p5;
 		const age = p5.millis() - this.birth;
 
 		if (this.type === 'score') {
-			// Safely handle score-specific updates
 			this.scale = Math.min(this.targetScale ?? 0, this.scale + 0.2);
 			this.y += this.vy;
 			this.vy *= 0.95;
 		} else if (this.orbit) {
-			// Add null checks for orbital properties
 			if (
 				this.orbitCenter &&
 				this.orbitRadius !== undefined &&
@@ -164,17 +221,13 @@ export class Particle {
 				this.y = this.orbitCenter.y + Math.sin(this.orbitAngle) * this.orbitRadius;
 			}
 		} else {
-			// Normal particle motion with safe defaults
 			this.x += this.vx;
 			this.y += this.vy;
-
-			// Apply gravity and friction
 			this.vy += (this.gravity ?? 0) * (this.cellSize / 40);
 			this.vx *= 0.98;
 			this.vy *= 0.98;
 		}
 
-		// Safely handle trail
 		if (this.trail) {
 			this.trailPoints.push({ x: this.x, y: this.y });
 			if (this.trailPoints.length > (this.trailLength ?? 3)) {
@@ -182,7 +235,6 @@ export class Particle {
 			}
 		}
 
-		// Safely handle sparkle
 		if (this.sparkle) {
 			this.sparkleTime = (this.sparkleTime + 0.1) % (Math.PI * 2);
 		}
@@ -191,6 +243,8 @@ export class Particle {
 	}
 
 	draw(): void {
+		if (!this.active) return;
+
 		const p5 = this.p5;
 		const age = p5.millis() - this.birth;
 		const lifePercent = age / this.lifetime;
@@ -199,13 +253,11 @@ export class Particle {
 
 		p5.push();
 
-		// Safely draw trail
 		if (this.trail && this.trailPoints.length > 1) {
 			let trailAlpha = alpha;
 			for (let i = 0; i < this.trailPoints.length - 1; i++) {
 				const point = this.trailPoints[i];
 				const nextPoint = this.trailPoints[i + 1];
-
 				trailAlpha *= this.trailDecay ?? 0.95;
 
 				if (this.glow) {
@@ -219,7 +271,6 @@ export class Particle {
 			}
 		}
 
-		// Safely apply glow and sparkle effects
 		if (this.glow) {
 			p5.drawingContext.shadowBlur = 15 * cellScale;
 			p5.drawingContext.shadowColor = this.color + this.hex(alpha);
@@ -233,7 +284,6 @@ export class Particle {
 		p5.noStroke();
 		p5.fill(this.color + this.hex(alpha));
 
-		// Safely handle text rendering
 		if (this.type === 'score') {
 			p5.textAlign(p5.CENTER, p5.CENTER);
 			p5.textSize(this.fontSize ?? 12);
@@ -246,7 +296,6 @@ export class Particle {
 		p5.pop();
 	}
 
-	// Helper method for hex conversion
 	private hex(n: number): string {
 		const h = Math.floor(n).toString(16);
 		return h.length === 1 ? '0' + h : h;

@@ -28,6 +28,11 @@ export const defaultConfig: GameConfig = {
 				points: '3',
 				slow: '4',
 			},
+			food: {
+				regular: 'a',
+				bonus: 's',
+				golden: 'd',
+			},
 			snake: {
 				grow: 's',
 			},

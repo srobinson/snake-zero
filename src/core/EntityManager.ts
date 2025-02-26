@@ -51,6 +51,8 @@ export class EntityManager {
 		this.food = null!;
 		this.powerUp = null;
 		this.snake = null!;
+
+		this.setupEventListeners();
 	}
 
 	/**
@@ -60,6 +62,21 @@ export class EntityManager {
 	public initialize(): void {
 		this.snake = new Snake(this.grid, this.game);
 		this.food = new Food(this.grid, this.game); // Safe to call getEntityManager() now
+	}
+
+	private setupEventListeners(): void {
+		const events = this.game.getEvents();
+		events.on(GameEvents.FOOD_COLLECTED, (data: FoodCollectedEventData) => {
+			if (data && data.position) {
+				this.game
+					.getParticleSystem()
+					.createFoodEffect(data.position, data.foodType, data.points, data.multiplier);
+				this.food?.respawn([this.snake]);
+			}
+		});
+		events.on(GameEvents.COLLISION, (_data: CollisionEventData) => {
+			this.game.getStateMachine().transition(GameStates.GAME_OVER);
+		});
 	}
 
 	/**

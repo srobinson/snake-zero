@@ -16,6 +16,8 @@ import { InputController } from './core/InputController';
 import { EntityManager } from './core/EntityManager';
 import { PowerUpManager } from './core/PowerUpManager';
 import { UIManager } from './core/UIManager';
+import { GameRenderer } from './core/GameRenderer';
+import { GameLoopManager } from './core/GameLoopManager';
 
 /**
  * Defines the contract for the Snake Zero game implementation.
@@ -31,6 +33,12 @@ export interface SnakeGame {
 
 	/** Getter for the UI manager instance, used by other systems for UI updates */
 	getUIManager(): UIManager;
+
+	/** Getter for the game renderer instance, used by GameLoopManager for rendering */
+	getRenderer(): GameRenderer;
+
+	/** Getter for the game loop manager instance, used by Game for updates */
+	getLoopManager(): GameLoopManager;
 
 	/**
 	 * Retrieves the grid instance for spatial calculations or rendering.

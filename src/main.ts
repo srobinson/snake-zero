@@ -33,6 +33,7 @@ import { SnakeGame } from './types'; // Interface defining the game implementati
 import { EntityManager } from './core/EntityManager';
 import { UIManager } from './core/UIManager';
 import { PowerUpManager } from './core/PowerUpManager';
+import { GameLoopManager } from './core/GameLoopManager';
 
 /**
  * Main game class implementing the SnakeGame interface.
@@ -70,8 +71,8 @@ export default class Game implements SnakeGame {
 	/** Power-up manager for spawning and applying power-ups */
 	private powerUpManager: PowerUpManager;
 
-	/** Current power-up item on the grid, null if none active */
-	private powerUp: PowerUp | null;
+	/** Game loop manager for timing and animation frame handling */
+	private loopManager: GameLoopManager;
 
 	/** p5.js instance for timing and canvas management, null until initialized */
 	private p5: p5 | null;
@@ -79,14 +80,8 @@ export default class Game implements SnakeGame {
 	/** Particle system for visual effects (e.g., food collection sparkles) */
 	private particleSystem: ParticleSystem | null;
 
-	/** Map of active power-up badges, keyed by power-up type for quick lookup */
-	private activePowerUps: Map<string, PowerUpBadge>;
-
 	/** Animation frame ID for the custom game loop, null when stopped */
 	private animationFrameId: number | null = null;
-
-	/** Timestamp of the last rendered frame for timing calculations */
-	private lastFrameTime: number = 0;
 
 	/**
 	 * Initializes the game with configuration, systems, and entities.
@@ -104,17 +99,17 @@ export default class Game implements SnakeGame {
 		this.inputController = new InputController(this); // Input handling delegated
 
 		// Initialize nullable properties
-		this.powerUp = null;
 		this.p5 = null;
 		this.particleSystem = null;
 		this.renderer = null!;
-		this.activePowerUps = new Map();
 
 		this.grid = new Grid(this.config);
 		this.entityManager = new EntityManager(this, this.grid);
 		this.entityManager.initialize();
-		this.uiManager = new UIManager(this.p5!, this);
 		this.powerUpManager = new PowerUpManager(this);
+		this.loopManager = new GameLoopManager(this);
+
+		this.uiManager = null!; // Initialized in setup
 
 		// Configure event listeners and resize handling
 		this.setupEventListeners();
@@ -128,29 +123,14 @@ export default class Game implements SnakeGame {
 	 */
 	public setup(p5Instance: p5): void {
 		this.p5 = p5Instance;
+		this.inputController.setup(p5Instance); // Set up input listeners
 		this.uiManager = new UIManager(this.p5, this);
 		this.powerUpManager = new PowerUpManager(this);
-		this.renderer = new GameRenderer(p5Instance, this);
 		this.particleSystem = new ParticleSystem(p5Instance, this);
+		this.renderer = new GameRenderer(p5Instance, this);
 		this.renderer.setup(); // Set up the canvas
-		this.inputController.setup(p5Instance); // Set up input listeners
-		this.startGameLoop(); // Begin custom animation loop
-	}
-
-	/**
-	 * Starts the custom game loop using requestAnimationFrame.
-	 * Updates game state and renders each frame.
-	 */
-	private startGameLoop(): void {
-		const gameLoop = (currentTime: number) => {
-			this.lastFrameTime = currentTime;
-			if (this.p5) {
-				this.update(); // Update game logic
-				this.renderer.render(); // Render visuals
-			}
-			this.animationFrameId = window.requestAnimationFrame(gameLoop);
-		};
-		this.animationFrameId = window.requestAnimationFrame(gameLoop);
+		this.loopManager.setup(this.p5); // Set up the game loop
+		this.loopManager.start();
 	}
 
 	/**
@@ -158,10 +138,7 @@ export default class Game implements SnakeGame {
 	 * Used when the game ends or is paused externally.
 	 */
 	public stopGameLoop(): void {
-		if (this.animationFrameId) {
-			window.cancelAnimationFrame(this.animationFrameId);
-			this.animationFrameId = null;
-		}
+		this.loopManager.stop();
 	}
 
 	public getEntityManager(): EntityManager {
@@ -170,6 +147,14 @@ export default class Game implements SnakeGame {
 
 	public getUIManager(): UIManager {
 		return this.uiManager;
+	}
+
+	public getRenderer(): GameRenderer {
+		return this.renderer;
+	}
+
+	public getLoopManager(): GameLoopManager {
+		return this.loopManager;
 	}
 
 	/**

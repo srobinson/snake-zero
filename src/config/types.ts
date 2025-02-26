@@ -1,3 +1,5 @@
+// src/config/types.ts
+
 // =========================================
 // Core Types
 // =========================================
@@ -17,6 +19,38 @@ export interface GameData {
 }
 
 /** Game event types */
+// export type GameEvent =
+// 	| 'food_collected'
+// 	| 'power_up_collected'
+// 	| 'power_up_expired'
+// 	| 'collision'
+// 	| 'score_changed'
+// 	| 'state_changed'
+// 	| 'speed_changed';
+
+/** Event data structure for different event types */
+// export interface EventData {
+// 	/** New score value for SCORE_CHANGED event */
+// 	score?: number;
+// 	/** New game state for STATE_CHANGED event */
+// 	state?: any;
+// 	/** New speed value for SPEED_CHANGED event */
+// 	speed?: number;
+// 	/** Type of power-up for POWER_UP_COLLECTED/EXPIRED events */
+// 	powerUpType?: string;
+// 	/** Position data for collision/collection events */
+// 	position?: {
+// 		x: number;
+// 		y: number;
+// 	};
+// 	/** Points value for FOOD_COLLECTED event */
+// 	points: number;
+// 	/** Points multiplier for FOOD_COLLECTED event */
+// 	multiplier: number;
+
+// 	foodType: FoodType;
+// }
+
 export type GameEvent =
 	| 'food_collected'
 	| 'power_up_collected'
@@ -26,28 +60,58 @@ export type GameEvent =
 	| 'state_changed'
 	| 'speed_changed';
 
-/** Event data structure for different event types */
-export interface EventData {
-	/** New score value for SCORE_CHANGED event */
-	score?: number;
-	/** New game state for STATE_CHANGED event */
-	state?: any;
-	/** New speed value for SPEED_CHANGED event */
-	speed?: number;
-	/** Type of power-up for POWER_UP_COLLECTED/EXPIRED events */
-	powerUpType?: string;
-	/** Position data for collision/collection events */
-	position?: {
-		x: number;
-		y: number;
-	};
-	/** Points value for FOOD_COLLECTED event */
-	points?: number;
-	/** Points multiplier for FOOD_COLLECTED event */
-	multiplier?: number;
-
-	foodType?: FoodType;
+// Event-specific data interfaces
+export interface FoodCollectedEventData {
+	position: Position;
+	points: number;
+	multiplier: number;
+	foodType: FoodType;
 }
+
+export interface PowerUpCollectedEventData {
+	powerUpType: string;
+	position: Position;
+}
+
+export interface PowerUpExpiredEventData {
+	powerUpType: string;
+}
+
+export interface CollisionEventData {
+	position: Position;
+}
+
+export interface ScoreChangedEventData {
+	score: number;
+}
+
+export interface StateChangedEventData {
+	state: any; // Could refine to GameState if imported
+	score?: number;
+	highScore?: number;
+	playTime?: number;
+}
+
+export interface SpeedChangedEventData {
+	speed: number;
+}
+
+// Map events to their data types
+export type EventDataMap = {
+	food_collected: FoodCollectedEventData;
+	power_up_collected: PowerUpCollectedEventData;
+	power_up_expired: PowerUpExpiredEventData;
+	collision: CollisionEventData;
+	score_changed: ScoreChangedEventData;
+	state_changed: StateChangedEventData;
+	speed_changed: SpeedChangedEventData;
+};
+
+// Union type for all event data (for flexibility if needed)
+export type EventData = EventDataMap[GameEvent];
+
+// Type for event callbacks, parameterized by event type
+export type EventCallback<T extends GameEvent = GameEvent> = (data: EventDataMap[T]) => void;
 
 /** Game events that can be emitted */
 export const GameEvents = {
@@ -68,7 +132,7 @@ export const GameEvents = {
 } as const;
 
 /** Type for the event callback function */
-export type EventCallback = (data: EventData) => void;
+// export type EventCallback = (data: EventData) => void;
 
 // =========================================
 // Window Types

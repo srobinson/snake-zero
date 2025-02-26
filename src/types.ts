@@ -4,11 +4,21 @@ import type { Grid } from './core/Grid';
 import type { Food } from './entities/Food';
 import type { PowerUp } from './entities/PowerUp';
 import type { EventSystem } from './core/EventSystem';
+import { GameController } from './core/GameController';
+import { DebugPanel } from './core/DebugPanel';
+import { PowerUpBadge } from './entities/PowerUpBadge';
+import { ParticleSystem } from './core/ParticleSystem';
 
 /**
  * Comprehensive Game interface representing the core game state and interactions
  */
 export interface SnakeGame {
+	getStateMachine(): GameController;
+	getDebugPanel(): DebugPanel;
+	getActiveBadges(): PowerUpBadge[];
+	getFloatingBadges(): PowerUpBadge[];
+	getParticleSystem(): ParticleSystem;
+
 	getEvents(): EventSystem;
 	getSnake(): Snake;
 	getGrid(): Grid;
@@ -16,9 +26,8 @@ export interface SnakeGame {
 	getPowerUp(): PowerUp | null;
 	getConfig(): GameConfig;
 	setConfig(config: GameConfig): void;
-	updatePowerUp(powerUp: PowerUp | null): void;
 
-	getCurrentScore(): number;
+	updatePowerUp(powerUp: PowerUp | null): void;
 
 	// Game state methods
 	recreate(): boolean;
@@ -32,7 +41,6 @@ export interface SnakeGame {
 
 	// Optional game loop methods
 	update(currentTime: number): void;
-	draw(): void;
 }
 
 /**

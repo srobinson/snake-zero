@@ -24,7 +24,7 @@ export abstract class Particle {
 		this.x = 0;
 		this.y = 0;
 		this.cellSize = cellSize;
-		this.birth = p5.millis();
+		this.birth = p5.millis() || 0;
 		this.lifetime = 0;
 		this.active = false;
 	}

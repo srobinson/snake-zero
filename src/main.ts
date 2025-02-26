@@ -11,7 +11,7 @@ import { DebugPanel } from './core/DebugPanel'; // Displays debug overlay with g
 import { GameController } from './core/GameController'; // Manages game state transitions
 import { GameStates } from './core/types'; // Defines possible game states (e.g., MENU, PLAYING)
 import { EventSystem } from './core/EventSystem'; // Type-safe event system for game communication
-import { Particles } from './core/Particles'; // Manages particle effects for visual feedback
+import { ParticleSystem } from './core/ParticleSystem'; // Manages particle effects for visual feedback
 
 // Import game entities with specific behaviors
 import { Snake } from './entities/Snake'; // Player-controlled snake entity
@@ -31,6 +31,7 @@ import {
 	CollisionEventData,
 } from './config/types'; // Core types and event constants
 import { SnakeGame } from './types'; // Interface defining the game implementation
+import { GameRenderer } from './core/GameRenderer'; // Handles rendering responsibilities for the game
 
 /**
  * Main game class implementing the SnakeGame interface.
@@ -50,6 +51,9 @@ export default class Game implements SnakeGame {
 	/** State machine controlling game states (MENU, PLAYING, PAUSED, GAME_OVER) */
 	private stateMachine: GameController;
 
+	/** Renderer for game visuals and UI elements, initialized in setup() */
+	private renderer: GameRenderer;
+
 	/** Debug panel for displaying runtime information and controls */
 	private debugPanel: DebugPanel;
 
@@ -66,7 +70,7 @@ export default class Game implements SnakeGame {
 	private p5: p5 | null;
 
 	/** Particle system for visual effects (e.g., food collection, power-up pickup) */
-	private particles: Particles | null;
+	private particles: ParticleSystem | null;
 
 	/** Map of active power-up badges, keyed by power-up type */
 	private activePowerUps: Map<string, PowerUpBadge>;
@@ -125,6 +129,24 @@ export default class Game implements SnakeGame {
 		// Configure event listeners and resize handling
 		this.setupEventListeners();
 		this.setupResizeHandler();
+
+		this.renderer = null!; // Initialize renderer
+	}
+
+	public getStateMachine(): GameController {
+		return this.stateMachine;
+	}
+	public getDebugPanel(): DebugPanel {
+		return this.debugPanel;
+	}
+	public getActiveBadges(): PowerUpBadge[] {
+		return this.activeBadges;
+	}
+	public getFloatingBadges(): PowerUpBadge[] {
+		return this.floatingBadges;
+	}
+	public getParticleSystem(): ParticleSystem {
+		return this.particles!;
 	}
 
 	/**
@@ -201,9 +223,9 @@ export default class Game implements SnakeGame {
 	 */
 	public setup(p5Instance: p5): void {
 		this.p5 = p5Instance; // Store p5 instance for rendering
-		const canvas = p5Instance.createCanvas(this.grid.getWidth(), this.grid.getHeight()); // Create canvas
-		canvas.parent('snaked-again-container'); // Attach to DOM container
-		this.particles = new Particles(p5Instance, this); // Initialize particle system
+		this.particles = new ParticleSystem(p5Instance, this); // Initialize particle system
+		this.renderer = new GameRenderer(p5Instance, this);
+		this.renderer.setup();
 		this.startGameLoop(); // Begin custom animation loop
 	}
 
@@ -218,7 +240,7 @@ export default class Game implements SnakeGame {
 			// Update and render only if p5 is initialized
 			if (this.p5) {
 				this.update(); // Update game state
-				this.draw(); // Render current frame
+				this.renderer.render(); // Render current frame
 			}
 
 			// Schedule next frame
@@ -293,179 +315,6 @@ export default class Game implements SnakeGame {
 		this.activeBadges = this.activeBadges.filter(badge => badge.update());
 		this.repositionBadges();
 		this.floatingBadges = this.floatingBadges.filter(badge => badge.update());
-	}
-
-	/**
-	 * Renders the current game state based on the state machine.
-	 * Draws the grid, entities, UI elements, and particles as needed.
-	 */
-	public draw(): void {
-		if (!this.p5) return; // Skip rendering if p5 isn’t initialized
-
-		this.p5.clear(); // Clear canvas for new frame
-
-		// Render based on current game state
-		switch (this.stateMachine.getState()) {
-			case GameStates.MENU:
-				this.drawMenu(); // Show menu screen
-				break;
-			case GameStates.PLAYING:
-				this.drawGame(); // Render active gameplay
-				break;
-			case GameStates.PAUSED:
-				this.drawGame(); // Draw game with pause overlay
-				this.drawPauseOverlay();
-				break;
-			case GameStates.GAME_OVER:
-				this.drawGame(); // Draw game with game over screen
-				this.drawGameOver();
-				break;
-		}
-
-		// Always update and draw particles if initialized
-		if (this.particles) {
-			this.particles.update();
-			this.particles.draw();
-		}
-	}
-
-	/**
-	 * Renders the main gameplay visuals: grid, entities, badges, score, and debug panel.
-	 */
-	private drawGame(): void {
-		const currentTime = this.p5!.millis();
-		this.grid.drawBackground(this.p5!); // Draw grid background
-		this.grid.drawGridLines(this.p5!); // Draw grid lines if enabled
-
-		// Render game entities
-		this.food.draw(this.p5!);
-		if (this.powerUp) {
-			this.powerUp.draw(this.p5!); // Draw power-up if present
-		}
-
-		// Draw snake and handle particle effects
-		this.snake.draw(this.p5!, currentTime);
-		this.particles!.update();
-		this.particles!.draw();
-
-		// Draw UI badges for active power-ups
-		for (const [type, badge] of this.activePowerUps) {
-			if (!badge.update()) {
-				this.activePowerUps.delete(type); // Remove expired badges
-				continue;
-			}
-			badge.draw();
-		}
-
-		// Render all persistent and floating badges
-		this.activeBadges.forEach(badge => badge.draw());
-		this.floatingBadges.forEach(badge => badge.draw());
-
-		this.drawScore(); // Render animated score
-		this.debugPanel.draw(this.p5!); // Render debug overlay
-	}
-
-	/**
-	 * Renders the main menu screen with title, high score, and instructions.
-	 */
-	private drawMenu(): void {
-		const p5 = this.p5!;
-		p5.fill(255); // White text
-		p5.textSize(32);
-		p5.textAlign(p5.CENTER, p5.CENTER);
-		p5.text('Snake Zero', this.grid.getWidth() / 2, this.grid.getHeight() / 2 - 60); // Title
-
-		p5.textSize(20);
-		p5.text(
-			`High Score: ${this.stateMachine.getCurrentHighScore()}`,
-			this.grid.getWidth() / 2,
-			this.grid.getHeight() / 2
-		); // Display high score
-		p5.text('Press SPACE to Start', this.grid.getWidth() / 2, this.grid.getHeight() / 2 + 40); // Start prompt
-
-		p5.textSize(16);
-		p5.text(
-			'Use Arrow Keys or WASD to move',
-			this.grid.getWidth() / 2,
-			this.grid.getHeight() / 2 + 80
-		); // Control instructions
-	}
-
-	/**
-	 * Renders a minimal pause overlay in the top-right corner.
-	 */
-	private drawPauseOverlay(): void {
-		const p5 = this.p5!;
-		p5.fill(255); // White text
-		p5.textSize(16);
-		p5.textAlign(p5.RIGHT, p5.TOP);
-		p5.text('PAUSED', this.grid.getWidth() - 10, -10); // Small pause indicator
-	}
-
-	/**
-	 * Renders the game over screen with final score and restart options.
-	 */
-	private drawGameOver(): void {
-		const p5 = this.p5!;
-		p5.fill(0, 0, 0, 200); // Semi-transparent black overlay
-		p5.rect(0, 0, this.grid.getWidth(), this.grid.getHeight());
-
-		p5.fill(255); // White text
-		p5.textSize(32);
-		p5.textAlign(p5.CENTER, p5.CENTER);
-		p5.text('Game Over!', this.grid.getWidth() / 2, this.grid.getHeight() / 2 - 40); // Game over message
-
-		p5.textSize(24);
-		p5.text(
-			`Score: ${this.stateMachine.getCurrentScore()}`,
-			this.grid.getWidth() / 2,
-			this.grid.getHeight() / 2 + 10
-		); // Final score
-		if (this.stateMachine.getCurrentScore() === this.stateMachine.getCurrentHighScore()) {
-			p5.text('New High Score!', this.grid.getWidth() / 2, this.grid.getHeight() / 2 + 40); // High score notice
-		}
-
-		p5.textSize(16);
-		p5.text('Press SPACE to Restart', this.grid.getWidth() / 2, this.grid.getHeight() / 2 + 80); // Restart prompt
-		p5.text('Press ESC for Menu', this.grid.getWidth() / 2, this.grid.getHeight() / 2 + 110); // Menu prompt
-	}
-
-	/**
-	 * Renders the current score with animation effects (scale and wiggle) when updated.
-	 */
-	private drawScore(): void {
-		const p5 = this.p5!;
-		p5.push(); // Save drawing state
-		p5.textFont('Press Start 2P'); // Arcade-style font
-		p5.textAlign(p5.CENTER, p5.TOP);
-		p5.textSize(80 * this.scoreScale); // Animated text size
-		p5.strokeWeight(4);
-		p5.stroke(0); // Black outline for contrast
-		p5.fill(255, 255, 255); // White fill
-		p5.drawingContext.shadowBlur = 10;
-		p5.drawingContext.shadowColor = 'rgba(255, 255, 0, 0.8)'; // Yellow glow effect
-
-		const x = this.grid.getWidth() / 2 + this.scoreWiggle; // Center with wiggle offset
-		const y = 20; // Top position
-		p5.text(this.stateMachine.getCurrentScore(), x, y); // Draw current score
-
-		// Animate score when points are added (scale up and wiggle)
-		if (this.scoreAnimationTime > 0) {
-			const elapsed = p5.millis() - this.scoreAnimationTime;
-			if (elapsed < this.SCORE_ANIMATION_DURATION) {
-				const t = elapsed / this.SCORE_ANIMATION_DURATION;
-				p5.drawingContext.shadowBlur = 100; // Intense glow during animation
-				this.scoreScale = 1 + (2 - 1) * (1 - t * t); // Quadratic ease-out from 2x to 1x
-				this.scoreWiggle = 10 * (1 - t) * Math.sin(t * 40); // Fast, decaying shake
-			} else {
-				this.scoreScale = 1; // Reset scale
-				this.scoreWiggle = 0; // Reset wiggle
-				this.scoreAnimationTime = 0; // End animation
-			}
-		}
-
-		p5.drawingContext.shadowBlur = 0; // Clear glow effect
-		p5.pop(); // Restore drawing state
 	}
 
 	/**
@@ -673,16 +522,6 @@ export default class Game implements SnakeGame {
 	/** Setter for the game configuration */
 	public setConfig(config: GameConfig): void {
 		this.config = config;
-	}
-
-	/** Getter for the current score */
-	public getCurrentScore(): number {
-		return this.stateMachine.getCurrentScore();
-	}
-
-	/** Getter for the high score */
-	public getCurrentHighScore(): number {
-		return this.stateMachine.getCurrentHighScore();
 	}
 
 	/** Getter for the total play time */

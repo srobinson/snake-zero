@@ -202,7 +202,11 @@ export class DebugPanel {
 			currentY += lineHeight;
 			p5.text(`Speed: ${currentSpeed.toFixed(1)}`, x + this.config.padding, currentY);
 			currentY += lineHeight;
-			p5.text(`Score: ${this.game.getCurrentScore()}`, x + this.config.padding, currentY);
+			p5.text(
+				`Score: ${this.game.getStateMachine().getCurrentScore()}`,
+				x + this.config.padding,
+				currentY
+			);
 			currentY += lineHeight;
 		}
 

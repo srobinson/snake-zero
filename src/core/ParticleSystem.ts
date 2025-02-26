@@ -10,7 +10,7 @@ import { ParticleEffectFactory } from './ParticleEffectFactory';
  * Manages particle effects in the game, such as food collection and power-up pickup visuals.
  * Delegates particle creation to a factory and handles their lifecycle (update, render, recycle).
  */
-export class Particles {
+export class ParticleSystem {
 	/** p5.js instance for rendering and timing particle effects */
 	private p5: p5;
 

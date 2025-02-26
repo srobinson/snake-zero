@@ -76,13 +76,13 @@ export class InputController {
 				} else {
 					// Handle snake movement based on configured controls
 					if (controls.up.includes(key)) {
-						this.game.getSnake().setDirection('up');
+						this.game.getEntityManager().getSnake().setDirection('up');
 					} else if (controls.down.includes(key)) {
-						this.game.getSnake().setDirection('down');
+						this.game.getEntityManager().getSnake().setDirection('down');
 					} else if (controls.left.includes(key)) {
-						this.game.getSnake().setDirection('left');
+						this.game.getEntityManager().getSnake().setDirection('left');
 					} else if (controls.right.includes(key)) {
-						this.game.getSnake().setDirection('right');
+						this.game.getEntityManager().getSnake().setDirection('right');
 					}
 				}
 				break;
@@ -144,9 +144,15 @@ export class InputController {
 			Math.abs(deltaY) > this.MIN_SWIPE_DISTANCE
 		) {
 			if (Math.abs(deltaX) > Math.abs(deltaY)) {
-				this.game.getSnake().setDirection(deltaX > 0 ? 'right' : 'left'); // Horizontal swipe
+				this.game
+					.getEntityManager()
+					.getSnake()
+					.setDirection(deltaX > 0 ? 'right' : 'left'); // Horizontal swipe
 			} else {
-				this.game.getSnake().setDirection(deltaY > 0 ? 'down' : 'up'); // Vertical swipe
+				this.game
+					.getEntityManager()
+					.getSnake()
+					.setDirection(deltaY > 0 ? 'down' : 'up'); // Vertical swipe
 			}
 		}
 

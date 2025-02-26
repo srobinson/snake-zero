@@ -58,7 +58,10 @@ export class DebugPanel {
 		const foodTypes = ['regular', 'bonus', 'golden'] as const;
 		for (const type of foodTypes) {
 			if (foodControls[type] === key) {
-				this.game.getFood().respawn([this.game.getSnake()], type);
+				this.game
+					.getEntityManager()
+					.getFood()
+					.respawn([this.game.getEntityManager().getSnake()], type);
 				return true;
 			}
 		}
@@ -66,7 +69,7 @@ export class DebugPanel {
 		// Snake controls
 		const snakeControls = this.config.controls.snake;
 		if (snakeControls.grow === key) {
-			this.game.getSnake().grow();
+			this.game.getEntityManager().getSnake().grow();
 			return true;
 		}
 
@@ -103,8 +106,8 @@ export class DebugPanel {
 
 	spawnPowerUp(type: 'speed' | 'ghost' | 'points' | 'slow') {
 		const newPowerUp = new PowerUp(this.game.getGrid(), [
-			this.game.getSnake(),
-			this.game.getFood(),
+			this.game.getEntityManager().getSnake(),
+			this.game.getEntityManager().getFood(),
 		]);
 		newPowerUp.setType(type);
 		this.game.updatePowerUp(newPowerUp);
@@ -153,7 +156,7 @@ export class DebugPanel {
 		if (this.config.showGridInfo) height += lineHeight * 3;
 		if (this.config.showEffects) {
 			height += lineHeight;
-			const effects = Array.from(this.game.getSnake().effects.entries());
+			const effects = Array.from(this.game.getEntityManager().getSnake().effects.entries());
 			height += (effects.length || 1) * lineHeight;
 		}
 		if (this.config.showControls) height += lineHeight * 4;
@@ -170,7 +173,7 @@ export class DebugPanel {
 		let currentY = y + this.config.padding;
 
 		// Draw current speed prominently at the top
-		const speed = this.game.getSnake().getCurrentSpeed();
+		const speed = this.game.getEntityManager().getSnake().getCurrentSpeed();
 		p5.textSize(this.config.fontSize * 1.5);
 		p5.textAlign(p5.CENTER);
 		p5.text(`${speed.toFixed(1)} cells/sec`, x + 100, currentY);
@@ -191,7 +194,7 @@ export class DebugPanel {
 		}
 
 		if (this.config.showSnakeInfo) {
-			const snake = this.game.getSnake();
+			const snake = this.game.getEntityManager().getSnake();
 			const currentSpeed = snake.getCurrentSpeed
 				? snake.getCurrentSpeed()
 				: this.game.getConfig().snake.baseSpeed;
@@ -225,17 +228,20 @@ export class DebugPanel {
 		if (this.config.showEffects) {
 			p5.text('Active Effects:', x + this.config.padding, currentY);
 			currentY += lineHeight;
-			const effects = Array.from(this.game.getSnake().effects.entries());
+			const effects = Array.from(this.game.getEntityManager().getSnake().effects.entries());
 			if (effects.length === 0) {
 				p5.text('None', x + this.config.padding + 10, currentY);
 				currentY += lineHeight;
 			} else {
 				effects.forEach(([effect, stacks]) => {
-					const timeLeft = this.game.getSnake().getEffectTimeRemaining(effect);
+					const timeLeft = this.game
+						.getEntityManager()
+						.getSnake()
+						.getEffectTimeRemaining(effect);
 					let effectText = `${effect}: ${(timeLeft / 1000).toFixed(1)}s`;
 
 					if (effect === 'points') {
-						effectText += ` (${this.game.getSnake().getPointsMultiplier()}x)`;
+						effectText += ` (${this.game.getEntityManager().getSnake().getPointsMultiplier()}x)`;
 					} else if (effect === 'speed') {
 						effectText += ` (${stacks.length}x)`;
 					}

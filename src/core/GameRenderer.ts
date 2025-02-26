@@ -48,6 +48,7 @@ export class GameRenderer {
 				break;
 			case GameStates.PLAYING:
 				this.drawGame();
+				this.game.getUIManager().renderScore();
 				break;
 			case GameStates.PAUSED:
 				this.drawGame();
@@ -67,11 +68,11 @@ export class GameRenderer {
 		const currentTime = this.p5.millis();
 		this.grid.drawBackground(this.p5);
 		this.grid.drawGridLines(this.p5);
+		this.game.getEntityManager().getFood().draw(this.p5);
 
-		this.game.getFood().draw(this.p5);
-		const powerUp = this.game.getPowerUp();
+		const powerUp = this.game.getEntityManager().getPowerUp();
 		if (powerUp) powerUp.draw(this.p5);
-		this.game.getSnake().draw(this.p5, currentTime);
+		this.game.getEntityManager().getSnake().draw(this.p5, currentTime);
 
 		// Access badges directly (assumes they're public or have getters)
 		this.game.getActiveBadges().forEach((badge: PowerUpBadge) => badge.draw());

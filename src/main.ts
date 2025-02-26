@@ -16,8 +16,6 @@ import { GameRenderer } from './core/GameRenderer'; // Handles all rendering res
 import { InputController } from './core/InputController'; // Processes user input (keyboard/touch)
 
 // Import game entities with specific behaviors
-import { Snake } from './entities/Snake'; // Player-controlled snake entity
-import { Food } from './entities/Food'; // Collectible food items
 import { PowerUp } from './entities/PowerUp'; // Temporary power-up items
 import { PowerUpBadge } from './entities/PowerUpBadge'; // UI badges for active power-ups
 
@@ -32,6 +30,9 @@ import {
 	GameEvents,
 } from './config/types'; // Core types and event constants
 import { SnakeGame } from './types'; // Interface defining the game implementation
+import { EntityManager } from './core/EntityManager';
+import { UIManager } from './core/UIManager';
+import { PowerUpManager } from './core/PowerUpManager';
 
 /**
  * Main game class implementing the SnakeGame interface.
@@ -60,11 +61,14 @@ export default class Game implements SnakeGame {
 	/** Input controller for processing keyboard and touch inputs */
 	private inputController: InputController;
 
-	/** Snake entity, publicly accessible for external interaction */
-	public snake: Snake;
+	/** Entity manager for snake, food, and power-ups */
+	private entityManager: EntityManager;
 
-	/** Current food item on the grid for the snake to collect */
-	private food: Food;
+	/** UI manager for handling power-up badges and floating effects */
+	private uiManager: UIManager;
+
+	/** Power-up manager for spawning and applying power-ups */
+	private powerUpManager: PowerUpManager;
 
 	/** Current power-up item on the grid, null if none active */
 	private powerUp: PowerUp | null;
@@ -73,16 +77,10 @@ export default class Game implements SnakeGame {
 	private p5: p5 | null;
 
 	/** Particle system for visual effects (e.g., food collection sparkles) */
-	private particles: ParticleSystem | null;
+	private particleSystem: ParticleSystem | null;
 
 	/** Map of active power-up badges, keyed by power-up type for quick lookup */
 	private activePowerUps: Map<string, PowerUpBadge>;
-
-	/** Array of persistent UI badges showing active power-ups */
-	private activeBadges: PowerUpBadge[];
-
-	/** Array of temporary floating badges for power-up collection effects */
-	private floatingBadges: PowerUpBadge[];
 
 	/** Animation frame ID for the custom game loop, null when stopped */
 	private animationFrameId: number | null = null;
@@ -104,18 +102,19 @@ export default class Game implements SnakeGame {
 		this.stateMachine = new GameController(this);
 		this.debugPanel = new DebugPanel(this);
 		this.inputController = new InputController(this); // Input handling delegated
-		this.grid = new Grid(this.config);
-		this.snake = new Snake(this.grid, this);
-		this.food = new Food(this.grid, this);
 
 		// Initialize nullable properties
 		this.powerUp = null;
 		this.p5 = null;
-		this.particles = null;
+		this.particleSystem = null;
 		this.renderer = null!;
 		this.activePowerUps = new Map();
-		this.floatingBadges = [];
-		this.activeBadges = [];
+
+		this.grid = new Grid(this.config);
+		this.entityManager = new EntityManager(this, this.grid);
+		this.entityManager.initialize();
+		this.uiManager = new UIManager(this.p5!, this);
+		this.powerUpManager = new PowerUpManager(this);
 
 		// Configure event listeners and resize handling
 		this.setupEventListeners();
@@ -129,8 +128,10 @@ export default class Game implements SnakeGame {
 	 */
 	public setup(p5Instance: p5): void {
 		this.p5 = p5Instance;
-		this.particles = new ParticleSystem(p5Instance, this);
+		this.uiManager = new UIManager(this.p5, this);
+		this.powerUpManager = new PowerUpManager(this);
 		this.renderer = new GameRenderer(p5Instance, this);
+		this.particleSystem = new ParticleSystem(p5Instance, this);
 		this.renderer.setup(); // Set up the canvas
 		this.inputController.setup(p5Instance); // Set up input listeners
 		this.startGameLoop(); // Begin custom animation loop
@@ -163,55 +164,23 @@ export default class Game implements SnakeGame {
 		}
 	}
 
+	public getEntityManager(): EntityManager {
+		return this.entityManager;
+	}
+
+	public getUIManager(): UIManager {
+		return this.uiManager;
+	}
+
 	/**
 	 * Updates game state during the PLAYING state.
 	 * Manages snake movement, collisions, power-up spawning, and badge updates.
 	 */
 	public update(): void {
-		if (!this.stateMachine.isInState(GameStates.PLAYING)) return; // Only update in PLAYING state
-		const currentTime = this.p5!.millis();
-		this.debugPanel.update(currentTime);
-
-		// Update snake and handle interactions
-		if (this.snake.update(currentTime)) {
-			if (this.snake.checkCollision()) {
-				this.events.emit(GameEvents.COLLISION, { position: this.snake.segments[0] });
-				return;
-			}
-			if (this.snake.checkFoodCollision(this.food)) {
-				this.snake.grow();
-				const basePoints = this.food.getPoints();
-				const multiplier = this.snake.getPointsMultiplier();
-				const finalPoints = basePoints * multiplier;
-				this.stateMachine.updateScore(finalPoints);
-				this.events.emit(GameEvents.FOOD_COLLECTED, {
-					position: this.food.getPosition(),
-					points: basePoints,
-					multiplier,
-					foodType: this.food.getType(),
-				});
-			}
-			if (this.powerUp && this.snake.checkPowerUpCollision(this.powerUp)) {
-				this.snake.addEffect(this.powerUp.type);
-				this.applyPowerUp(this.powerUp.type, this.powerUp.position);
-				this.events.emit(GameEvents.POWER_UP_COLLECTED, {
-					powerUpType: this.powerUp.type,
-					position: this.powerUp.position,
-				});
-				this.powerUp = null;
-			}
-		}
-
-		// Spawn power-ups based on difficulty settings
-		const difficulty = this.config.difficulty.presets[this.config.difficulty.current];
-		if (!this.powerUp && Math.random() < difficulty.powerUpChance) {
-			this.powerUp = new PowerUp(this.grid, [this.snake, this.food]);
-		}
-
-		// Update and filter badges, removing expired ones
-		this.activeBadges = this.activeBadges.filter(badge => badge.update());
-		this.repositionBadges();
-		this.floatingBadges = this.floatingBadges.filter(badge => badge.update());
+		this.entityManager.update(); // Delegate entity updates
+		this.debugPanel.update(this.p5!.millis());
+		this.uiManager.update();
+		this.powerUpManager.update();
 	}
 
 	/**
@@ -223,19 +192,19 @@ export default class Game implements SnakeGame {
 		// Food collection: triggers particle effect and food respawn
 		this.events.on(GameEvents.FOOD_COLLECTED, (data: FoodCollectedEventData) => {
 			if (data && data.position) {
-				this.particles!.createFoodEffect(
+				this.particleSystem!.createFoodEffect(
 					data.position,
 					data.foodType,
 					data.points,
 					data.multiplier
 				);
-				this.food.respawn([this.snake]);
+				this.entityManager.getFood().respawn([this.entityManager.getSnake()]);
 			}
 		});
 		// Power-up collection: triggers particle effect
 		this.events.on(GameEvents.POWER_UP_COLLECTED, (data: PowerUpCollectedEventData) => {
 			if (data && data.position && data.powerUpType) {
-				this.particles!.createPowerUpEffect(data.position, data.powerUpType);
+				this.particleSystem!.createPowerUpEffect(data.position, data.powerUpType);
 			}
 		});
 		// Collision: transitions to game over state
@@ -256,22 +225,6 @@ export default class Game implements SnakeGame {
 					this.p5.resizeCanvas(this.grid.getWidth(), this.grid.getHeight());
 				}
 			}
-		});
-	}
-
-	/**
-	 * Repositions UI badges for active power-ups along the top of the screen.
-	 * Adjusts spacing based on grid cell size for readability.
-	 */
-	private repositionBadges(): void {
-		const cellSize = this.grid.getCellSize();
-		const badgeSize = cellSize * (cellSize < 20 ? 2.0 : 1.2); // Scale badge size
-		const badgeSpacing = cellSize * 0.4; // Space between badges
-		const margin = cellSize; // Margin from edges
-
-		this.activeBadges.forEach((badge, index) => {
-			const newX = margin + index * (badgeSize + badgeSpacing);
-			badge.setPosition(newX, margin);
 		});
 	}
 
@@ -304,10 +257,7 @@ export default class Game implements SnakeGame {
 	 * Recreates entities and rebinds event listeners.
 	 */
 	public reset(): void {
-		this.snake = new Snake(this.grid, this);
-		this.food = new Food(this.grid, this);
-		this.powerUp = null;
-		this.setupEventListeners();
+		this.entityManager.reset();
 	}
 
 	/**
@@ -317,95 +267,30 @@ export default class Game implements SnakeGame {
 	 * @param powerUpPosition - Position where power-up was collected
 	 */
 	public applyPowerUp(type: PowerUpType, powerUpPosition: Position): void {
-		const existingBadgeIndex = this.activeBadges.findIndex(badge => badge.getType() === type);
+		const existingBadgeIndex = this.uiManager
+			.getActiveBadges()
+			.findIndex(badge => badge.getType() === type);
+
 		if (existingBadgeIndex !== -1) {
-			this.activeBadges[existingBadgeIndex].resetStartTime(); // Refresh existing badge
+			this.uiManager.getActiveBadges()[existingBadgeIndex].resetStartTime();
 		} else {
-			this.addPowerUpBadge(type, powerUpPosition); // Add new badge
+			this.uiManager.addPowerUpBadge(type, powerUpPosition);
 		}
-		const position = this.snake.segments[0];
-		this.particles!.createPowerUpEffect(position, type);
+		const position = this.entityManager.getSnake().segments[0];
+		this.particleSystem!.createPowerUpEffect(position, type);
 	}
 
 	/**
-	 * Adds a power-up badge to the UI and a floating badge effect.
-	 * @param type - Type of power-up for the badge
-	 * @param powerUpPosition - Position where power-up was collected
+	 * Retrieves the power-up manager for power-up spawning and application.
+	 * @returns The power-up manager instance
 	 */
-	public addPowerUpBadge(type: PowerUpType, powerUpPosition: Position): void {
-		const config = this.config.powerUps.badges;
-		const cellSize = this.grid.getCellSize();
-		const badgeSize = cellSize * (cellSize < 20 ? 2.0 : 1.2);
-		const floatingBadgeSize = cellSize * (cellSize < 20 ? 2.5 : 1.8);
-		const badgeSpacing = cellSize * 0.4;
-		const margin = cellSize;
-		const powerUpPos = this.grid.getCellCenter(powerUpPosition);
-
-		const initialX = margin + this.activeBadges.length * (badgeSize + badgeSpacing);
-		const uiBadge = new PowerUpBadge(
-			this.p5!,
-			type,
-			{
-				...this.config.powerUps,
-				colors: this.config.powerUps.colors,
-				icons: this.config.powerUps.icons,
-				effects: this.config.powerUps.effects,
-				badges: {
-					...config,
-					duration: this.config.powerUps.effects[type].duration,
-					size: badgeSize,
-					hoverAmplitude: cellSize * config.hoverAmplitude,
-					hoverFrequency: config.hoverFrequency || 2,
-					popInDuration: config.popInDuration || 300,
-					popInScale: config.popInScale || 1.2,
-				},
-			},
-			initialX,
-			margin,
-			false // Persistent badge
-		);
-		this.activeBadges.push(uiBadge);
-
-		const floatingBadge = new PowerUpBadge(
-			this.p5!,
-			type,
-			{
-				...this.config.powerUps,
-				badges: {
-					...config,
-					duration: 1500, // Short duration for floating effect
-					size: floatingBadgeSize,
-					hoverAmplitude: cellSize * config.hoverAmplitude,
-					hoverFrequency: config.hoverFrequency || 2,
-				},
-			},
-			powerUpPos.x,
-			powerUpPos.y,
-			true // Floating badge
-		);
-		this.floatingBadges.push(floatingBadge);
-
-		this.repositionBadges();
-	}
-
-	/** Getter for the snake instance */
-	public getSnake(): Snake {
-		return this.snake;
+	public getPowerUpManager(): PowerUpManager {
+		return this.powerUpManager;
 	}
 
 	/** Getter for the grid instance */
 	public getGrid(): Grid {
 		return this.grid;
-	}
-
-	/** Getter for the food instance */
-	public getFood(): Food {
-		return this.food;
-	}
-
-	/** Getter for the current power-up */
-	public getPowerUp(): PowerUp | null {
-		return this.powerUp;
 	}
 
 	/** Getter for the game configuration */
@@ -430,17 +315,17 @@ export default class Game implements SnakeGame {
 
 	/** Getter for active power-up badges */
 	public getActiveBadges(): PowerUpBadge[] {
-		return this.activeBadges;
+		return this.uiManager.getActiveBadges();
 	}
 
 	/** Getter for floating power-up badges */
 	public getFloatingBadges(): PowerUpBadge[] {
-		return this.floatingBadges;
+		return this.uiManager.getFloatingBadges();
 	}
 
 	/** Getter for the particle system */
 	public getParticleSystem(): ParticleSystem {
-		return this.particles!;
+		return this.particleSystem!;
 	}
 
 	/** Getter for total play time */
@@ -455,12 +340,17 @@ export default class Game implements SnakeGame {
 
 	/** Setter for the current power-up */
 	public updatePowerUp(powerUp: PowerUp | null): void {
-		this.powerUp = powerUp;
+		this.entityManager.setPowerUp(powerUp);
 	}
 
 	/** Getter for the input controller */
 	public getInputController(): InputController {
 		return this.inputController;
+	}
+
+	/** Getter for p5 instance, used by EntityManager for timing */
+	public getP5(): p5 | null {
+		return this.p5;
 	}
 }
 

@@ -11,7 +11,6 @@ import type { Position, Obstacle, Grid } from './types';
  * - Bonus: Crystal with energy arcs
  * - Golden: Portal with reality-bending effects
  */
-
 export class Food {
 	private color: string;
 	private config: FoodConfig;
@@ -29,15 +28,16 @@ export class Food {
 		this.type = this.getRandomType();
 		this.color = this.config.colors[this.type].primary!;
 		this.lastPositions = new Set();
-		this.position = this.getInitialPosition();
 		this.spawnTime = Date.now();
+		this.position = this.getInitialPosition();
 	}
 
 	private getInitialPosition(): Position {
 		let newPosition: Position;
 		let attempts = 0;
 		const maxAttempts = 100;
-		const snakeSegments = this.game.getSnake().segments;
+
+		const snakeSegments = this.game.getEntityManager().getSnake().segments;
 
 		do {
 			newPosition = this.getRandomPosition();
@@ -101,7 +101,7 @@ export class Food {
 	public getPoints(): number {
 		// Get base points for this food type
 		const basePoints = this.config.points[this.type];
-		const hasPointsEffect = this.game.getSnake().hasEffect('points');
+		const hasPointsEffect = this.game.getEntityManager().getSnake().hasEffect('points');
 		return hasPointsEffect ? basePoints * 2 : basePoints;
 	}
 

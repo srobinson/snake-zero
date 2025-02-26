@@ -13,6 +13,9 @@ import { DebugPanel } from './core/DebugPanel';
 import { PowerUpBadge } from './entities/PowerUpBadge';
 import { ParticleSystem } from './core/ParticleSystem';
 import { InputController } from './core/InputController';
+import { EntityManager } from './core/EntityManager';
+import { PowerUpManager } from './core/PowerUpManager';
+import { UIManager } from './core/UIManager';
 
 /**
  * Defines the contract for the Snake Zero game implementation.
@@ -20,29 +23,20 @@ import { InputController } from './core/InputController';
  * Used by Game class and potentially other implementations (e.g., mocks for testing).
  */
 export interface SnakeGame {
-	/**
-	 * Retrieves the snake entity for external access or rendering.
-	 * @returns The current snake instance
-	 */
-	getSnake(): Snake;
+	/** Getter for p5 instance, used by EntityManager for timing */
+	getP5(): p5 | null;
+
+	/** Getter for EntityManager instance, used by other systems for entity access */
+	getEntityManager(): EntityManager;
+
+	/** Getter for the UI manager instance, used by other systems for UI updates */
+	getUIManager(): UIManager;
 
 	/**
 	 * Retrieves the grid instance for spatial calculations or rendering.
 	 * @returns The game grid
 	 */
 	getGrid(): Grid;
-
-	/**
-	 * Retrieves the current food item on the grid.
-	 * @returns The food entity
-	 */
-	getFood(): Food;
-
-	/**
-	 * Retrieves the current power-up item, or null if none is active.
-	 * @returns The active power-up or null
-	 */
-	getPowerUp(): PowerUp | null;
 
 	/**
 	 * Retrieves the game configuration for settings access.
@@ -85,6 +79,12 @@ export interface SnakeGame {
 	 * @returns The particle system instance, or null if not initialized
 	 */
 	getParticleSystem(): ParticleSystem;
+
+	/**
+	 * Retrieves the powerup manager for spawning and applying power-ups.
+	 * @returns The powerup manager instance
+	 */
+	getPowerUpManager(): PowerUpManager;
 
 	/**
 	 * Retrieves the total play time accumulated during the game.
@@ -143,13 +143,6 @@ export interface SnakeGame {
 	 * @param powerUpPosition - Position where the power-up was collected
 	 */
 	applyPowerUp(type: PowerUpType, powerUpPosition: Position): void;
-
-	/**
-	 * Adds a power-up badge to the UI and a floating effect at the collection point.
-	 * @param type - The type of power-up for the badge
-	 * @param powerUpPosition - Position where the power-up was collected
-	 */
-	addPowerUpBadge(type: PowerUpType, powerUpPosition: Position): void;
 }
 
 /**

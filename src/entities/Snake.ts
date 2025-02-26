@@ -242,7 +242,7 @@ export class Snake implements Obstacle {
 	public grow(): void {
 		this.growing = true;
 		this.foodEaten = (this.foodEaten || 0) + 1;
-		const basePoints = this.game.getFood().getPoints();
+		const basePoints = this.game.getEntityManager().getFood().getPoints();
 		const multiplier = this.getPointsMultiplier();
 		const scoreData: ScoreChangedEventData = { score: basePoints * multiplier };
 		this.game.getEvents().emit(GameEvents.SCORE_CHANGED, scoreData);
